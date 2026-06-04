@@ -1,0 +1,6 @@
+{
+  "name": "Financial Planner MZ",
+  "description": "Una aplicación ejecutiva de planificación y control de finanzas personales, incluyendo presupuestos mensuales, compras a plazos, control de tarjetas de crédito, calendario de pagos y un panel de análisis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
