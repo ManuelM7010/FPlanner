@@ -34,6 +34,8 @@ export interface Transaction {
   month: string;   // YYYY-MM (budget month classification)
   isFixed: boolean;
   subscriptionId?: string; // Links back to subscription template
+  installmentId?: string;  // Links back to installment/loan purchase template
+  installmentIndex?: number; // e.g., 3 (Cuota 3/12)
 }
 
 export interface InstallmentPurchase {

@@ -10,6 +10,8 @@ import {
   INITIAL_TRANSACTIONS, INITIAL_INSTALLMENTS 
 } from './data/initialData';
 
+import { getProjectedInstallments, computeMonthlyAccountBalances } from './utils/financeUtils';
+
 // Component imports
 import Dashboard from './components/Dashboard';
 import BudgetSection from './components/BudgetSection';
@@ -22,7 +24,7 @@ import SubscriptionsSection from './components/SubscriptionsSection';
 
 export default function App() {
   // Navigation active tab State
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [activeTab, setActiveTab ] = useState<string>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
 
   // Core Financial State loaded from localStorage or seeded default
@@ -36,14 +38,25 @@ export default function App() {
         if (!parsed.subscriptions) parsed.subscriptions = [];
         
         // Ensure the default "Suscripciones/Planes" category exists to stay robust
-        if (parsed.categories && !parsed.categories.some((c: any) => c.id === 'cat-subscriptions')) {
-          parsed.categories.push({
-            id: 'cat-subscriptions',
-            name: 'Suscripciones/Planes',
-            color: '#6366F1',
-            type: 'expense',
-            icon: 'Sparkles'
-          });
+        if (parsed.categories) {
+          if (!parsed.categories.some((c: any) => c.id === 'cat-subscriptions')) {
+            parsed.categories.push({
+              id: 'cat-subscriptions',
+              name: 'Suscripciones/Planes',
+              color: '#6366F1',
+              type: 'expense',
+              icon: 'Sparkles'
+            });
+          }
+          if (!parsed.categories.some((c: any) => c.id === 'cat-installments')) {
+            parsed.categories.push({
+              id: 'cat-installments',
+              name: 'Cuotas / Préstamos',
+              color: '#F43F5E',
+              type: 'expense',
+              icon: 'Layers'
+            });
+          }
         }
         return parsed;
       } catch (e) {
@@ -63,6 +76,13 @@ export default function App() {
           color: '#6366F1',
           type: 'expense',
           icon: 'Sparkles'
+        },
+        {
+          id: 'cat-installments',
+          name: 'Cuotas / Préstamos',
+          color: '#F43F5E',
+          type: 'expense',
+          icon: 'Layers'
         }
       ],
       selectedMonth: '2026-06',
@@ -75,57 +95,164 @@ export default function App() {
     localStorage.setItem('mz_planner_state', JSON.stringify(state));
   }, [state]);
 
-  // Synchronize Subscriptions -> Auto-populate transactions for current selectedMonth
+  // Synchronize Subscriptions and Installments -> Proactively auto-populate transactions across ALL configured months
   useEffect(() => {
-    const subs = state.subscriptions || [];
-    if (subs.length === 0) return;
+    setState(prev => {
+      const currentTxList = [...prev.transactions];
+      const subsList = prev.subscriptions || [];
+      const instsList = prev.installments || [];
+      
+      let changed = false;
 
-    const currentSubscriptions = subs.filter(s => 
-      s.activeMonths.includes(state.selectedMonth)
-    );
+      // 1. Remove transactions of subscriptions that no longer exist or are inactive in that month
+      let updatedTxs = currentTxList.filter(t => {
+        if (t.subscriptionId) {
+          const sub = subsList.find(s => s.id === t.subscriptionId);
+          if (!sub) {
+            changed = true;
+            return false; // delete since subscription template was deleted
+          }
+          const isMonthActive = sub.activeMonths.includes(t.month);
+          if (!isMonthActive) {
+            changed = true;
+            return false; // delete since month is no longer active for this subscription
+          }
+        }
+        return true;
+      });
 
-    const missingSubs = currentSubscriptions.filter(s => 
-      !state.transactions.some(t => t.subscriptionId === s.id && t.month === state.selectedMonth)
-    );
-
-    if (missingSubs.length > 0) {
-      setState(prev => {
-        const currentTxList = [...prev.transactions];
-        const newTxs: Transaction[] = [];
-
-        missingSubs.forEach(s => {
-          const alreadyExists = currentTxList.some(t => t.subscriptionId === s.id && t.month === prev.selectedMonth) || 
-                                newTxs.some(t => t.subscriptionId === s.id && t.month === prev.selectedMonth);
-          
+      // 2. Add or update missing transactions for all active months of subscriptions
+      subsList.forEach(s => {
+        s.activeMonths.forEach(mStr => {
+          const alreadyExists = updatedTxs.some(t => t.subscriptionId === s.id && t.month === mStr);
           if (!alreadyExists) {
             const dayStr = String(s.dayOfMonth).padStart(2, '0');
-            const targetDate = `${prev.selectedMonth}-${dayStr}`;
+            const targetDate = `${mStr}-${dayStr}`;
             
-            newTxs.push({
-              id: `sub-tx-${s.id}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            updatedTxs.push({
+              id: `sub-tx-${s.id}-${mStr}`, // Stable static ID based on subscription and month
               description: s.name,
               amount: s.amount,
               type: 'expense',
-              category: s.category,
+              category: s.category || 'cat-subscriptions',
               paymentMethod: s.paymentMethod,
               cardId: s.cardId,
               date: targetDate,
-              month: prev.selectedMonth,
+              month: mStr,
               isFixed: true,
               subscriptionId: s.id
             });
+            changed = true;
+          } else {
+            // Update transaction fields if subscription changed (e.g. name, amount, category, paymentMethod, cardId)
+            updatedTxs = updatedTxs.map(t => {
+              if (t.subscriptionId === s.id && t.month === mStr) {
+                const dayStr = String(s.dayOfMonth).padStart(2, '0');
+                const targetDate = `${mStr}-${dayStr}`;
+                if (
+                  t.description !== s.name ||
+                  t.amount !== s.amount ||
+                  t.category !== s.category ||
+                  t.paymentMethod !== s.paymentMethod ||
+                  t.cardId !== s.cardId ||
+                  t.date !== targetDate
+                ) {
+                  changed = true;
+                  return {
+                    ...t,
+                    description: s.name,
+                    amount: s.amount,
+                    category: s.category || 'cat-subscriptions',
+                    paymentMethod: s.paymentMethod,
+                    cardId: s.cardId,
+                    date: targetDate
+                  };
+                }
+              }
+              return t;
+            });
           }
         });
-
-        if (newTxs.length === 0) return prev;
-
-        return {
-          ...prev,
-          transactions: [...prev.transactions, ...newTxs]
-        };
       });
-    }
-  }, [state.selectedMonth, state.subscriptions, state.transactions]);
+
+      // 3. Remove transactions of credit card installments or loans that no longer exist
+      updatedTxs = updatedTxs.filter(t => {
+        if (t.installmentId) {
+          const inst = instsList.find(i => i.id === t.installmentId);
+          if (!inst) {
+            changed = true;
+            return false; // deleted
+          }
+          // Check if this month is still projected in the active schedule
+          const projected = getProjectedInstallments(inst);
+          const hasProjectedMonth = projected.some(p => p.chargeMonth === t.month);
+          if (!hasProjectedMonth) {
+            changed = true;
+            return false; // no longer part of active installments sequence
+          }
+        }
+        return true;
+      });
+
+      // 4. Add or update transactions for projected installments
+      instsList.forEach(inst => {
+        const projected = getProjectedInstallments(inst);
+        projected.forEach(proj => {
+          const alreadyExists = updatedTxs.some(t => t.installmentId === inst.id && t.month === proj.chargeMonth);
+          if (!alreadyExists) {
+            updatedTxs.push({
+              id: `inst-tx-${inst.id}-${proj.chargeMonth}`,
+              description: `${inst.description} (${proj.installmentIndex}/${inst.installments})`,
+              amount: inst.monthlyPayment,
+              type: 'expense',
+              category: 'cat-installments',
+              paymentMethod: inst.type === 'credit_card' ? 'credit' : 'debit',
+              cardId: inst.cardId,
+              date: proj.chargeDate,
+              month: proj.chargeMonth,
+              isFixed: true,
+              installmentId: inst.id,
+              installmentIndex: proj.installmentIndex
+            });
+            changed = true;
+          } else {
+            // Update fields if changed
+            updatedTxs = updatedTxs.map(t => {
+              if (t.installmentId === inst.id && t.month === proj.chargeMonth) {
+                const expectedDesc = `${inst.description} (${proj.installmentIndex}/${inst.installments})`;
+                const expectedPaymentMethod = inst.type === 'credit_card' ? 'credit' : 'debit';
+                if (
+                  t.description !== expectedDesc ||
+                  t.amount !== inst.monthlyPayment ||
+                  t.paymentMethod !== expectedPaymentMethod ||
+                  t.cardId !== inst.cardId ||
+                  t.date !== proj.chargeDate
+                ) {
+                  changed = true;
+                  return {
+                    ...t,
+                    description: expectedDesc,
+                    amount: inst.monthlyPayment,
+                    paymentMethod: expectedPaymentMethod,
+                    cardId: inst.cardId,
+                    date: proj.chargeDate
+                  };
+                }
+              }
+              return t;
+            });
+          }
+        });
+      });
+
+      if (!changed) return prev;
+
+      return {
+        ...prev,
+        transactions: updatedTxs
+      };
+    });
+  }, [state.subscriptions, state.installments]);
 
   // Dynamic available months based on selectedYear of state.selectedMonth
   const [currentYearStr, currentMonthStr] = state.selectedMonth.split('-');

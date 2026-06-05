@@ -8,7 +8,7 @@ import {
   AlertCircle, ChevronRight, Briefcase, Sparkles 
 } from 'lucide-react';
 import { AppState, Transaction, InstallmentPurchase } from '../types';
-import { getProjectedInstallments, computeCardStatementsForMonth } from '../utils/financeUtils';
+import { getProjectedInstallments, computeCardStatementsForMonth, computeMonthlyAccountBalances } from '../utils/financeUtils';
 
 interface DashboardProps {
   state: AppState;
@@ -18,6 +18,8 @@ interface DashboardProps {
 export default function Dashboard({ state, onNavigate }: DashboardProps) {
   const { transactions, creditCards, debitCards, installments, categories, selectedMonth } = state;
 
+  const [viewType, setViewType] = React.useState<'monthly' | 'cumulative'>('monthly');
+
   const [year, month] = selectedMonth.split('-');
   const monthNamesEs = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -25,45 +27,68 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
   ];
   const monthLabel = `${monthNamesEs[parseInt(month, 10) - 1]} ${year}`;
 
-  // 1. INCOMES for selectedMonth
+  const selectedYearStr = year;
+  const selectedMonthNum = parseInt(month, 10);
+  
+  // Calculate cumulative months from January up to selectedMonth for current year
+  const cumulativeMonths: string[] = [];
+  for (let mNum = 1; mNum <= selectedMonthNum; mNum++) {
+    cumulativeMonths.push(`${selectedYearStr}-${String(mNum).padStart(2, '0')}`);
+  }
+
+  const activePeriodMonths = viewType === 'monthly' ? [selectedMonth] : cumulativeMonths;
+
+  // 1. INCOMES for active period
   const monthlyIncomes = transactions
-    .filter(t => t.month === selectedMonth && t.type === 'income')
+    .filter(t => activePeriodMonths.includes(t.month) && t.type === 'income')
     .reduce((sum, t) => sum + t.amount, 0);
 
-  // 2. CASH OUTFLOWS (Direct Expenses paid with cash, debit, transfer in selectedMonth)
+  // 2. CASH OUTFLOWS (Direct Expenses paid with cash, debit, transfer in active period)
   const directExpenses = transactions
-    .filter(t => t.month === selectedMonth && t.type === 'expense' && t.paymentMethod !== 'credit')
+    .filter(t => activePeriodMonths.includes(t.month) && t.type === 'expense' && t.paymentMethod !== 'credit')
     .reduce((sum, t) => sum + t.amount, 0);
 
-  // 3. LOANS paid strictly in this selectedMonth
+  // 3. LOANS paid strictly in active period
   const activeLoansList = installments.filter(inst => inst.type === 'loan');
   const loanPayments = activeLoansList
     .flatMap(inst => getProjectedInstallments(inst))
-    .filter(proj => proj.chargeMonth === selectedMonth)
+    .filter(proj => activePeriodMonths.includes(proj.chargeMonth))
     .reduce((sum, p) => sum + p.monthlyAmount, 0);
 
-  // 4. CREDIT CARD PAYMENTS due in selectedMonth (which comes from the cycles closing in the previous month)
-  // Let's compute previous month YYYY-MM
-  let prevYear = parseInt(year, 10);
-  let prevMonth = parseInt(month, 10) - 1;
-  if (prevMonth === 0) {
-    prevMonth = 12;
-    prevYear -= 1;
-  }
-  const prevMonthStr = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
-  
-  // Calculate billing balance due for each credit card
+  // 4. CREDIT CARD PAYMENTS due in selection cycle month(s)
   let totalCardPaymentsDue = 0;
   const cardsDueBalances = creditCards.map(card => {
-    const prevStatement = computeCardStatementsForMonth(creditCards, transactions, installments, prevMonthStr)
-      .find(s => s.cardId === card.id);
-    const balance = prevStatement ? prevStatement.billingBalance : 0;
-    totalCardPaymentsDue += balance;
+    let dueAmount = 0;
+    let dueDatesList: string[] = [];
+
+    activePeriodMonths.forEach(mStr => {
+      const [mY, mMonth] = mStr.split('-');
+      let prevYr = parseInt(mY, 10);
+      let prevM = parseInt(mMonth, 10) - 1;
+      if (prevM === 0) {
+        prevM = 12;
+        prevYr -= 1;
+      }
+      const prevMStr = `${prevYr}-${String(prevM).padStart(2, '0')}`;
+      
+      const prevStatement = computeCardStatementsForMonth(creditCards, transactions, installments, prevMStr)
+        .find(s => s.cardId === card.id);
+      
+      if (prevStatement) {
+        dueAmount += prevStatement.billingBalance;
+        if (prevStatement.paymentDueDateStr) {
+          dueDatesList.push(prevStatement.paymentDueDateStr);
+        }
+      }
+    });
+
+    totalCardPaymentsDue += dueAmount;
+
     return {
       cardName: card.name,
-      dueAmount: balance,
-      closingDate: prevStatement ? prevStatement.closingDateStr : '',
-      dueDate: prevStatement ? prevStatement.paymentDueDateStr : ''
+      dueAmount: Number(dueAmount.toFixed(2)),
+      closingDate: '',
+      dueDate: dueDatesList.length > 0 ? (viewType === 'monthly' ? dueDatesList[0] : `${dueDatesList.length} pagos`) : 'Sin pago'
     };
   });
 
@@ -71,13 +96,15 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
   const netSavings = monthlyIncomes - totalOutflows;
   const savingsRate = monthlyIncomes > 0 ? (netSavings / monthlyIncomes) * 100 : 0;
 
-  // Pie chart expenses split by Category (combined direct expenses + loans + credit card payments)
-  // Let's categorize every expense that actually costs money in this month
+  // Account flows for the selectedMonth balance rollover logic
+  const accountFlows = computeMonthlyAccountBalances(debitCards, transactions, selectedMonth);
+
+  // Pie chart expenses split by Category
   const categorySplitMap: { [key: string]: { name: string; value: number; color: string } } = {};
 
   // Direct expenses categorization
   transactions
-    .filter(t => t.month === selectedMonth && t.type === 'expense' && t.paymentMethod !== 'credit')
+    .filter(t => activePeriodMonths.includes(t.month) && t.type === 'expense' && t.paymentMethod !== 'credit')
     .forEach(t => {
       const catObj = categories.find(c => c.id === t.category);
       const catName = catObj ? catObj.name : 'Otros';
@@ -88,64 +115,70 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
       categorySplitMap[t.category].value += t.amount;
     });
 
-  // Adding Loans of this month to Vivienda/Otros
+  // Adding Loans of this period to category breakdown
   if (loanPayments > 0) {
-    const loanCatId = 'cat-housing'; // or other
+    const loanCatId = 'cat-housing';
     const catObj = categories.find(c => c.id === loanCatId);
     const catName = 'Préstamos / Préstamos Auto';
     const catColor = catObj ? catObj.color : '#3B82F6';
-    if (!categorySplitMap['cat-housing']) {
-      categorySplitMap['cat-housing'] = { name: catName, value: 0, color: catColor };
+    if (!categorySplitMap[loanCatId]) {
+      categorySplitMap[loanCatId] = { name: catName, value: 0, color: catColor };
     }
-    categorySplitMap['cat-housing'].value += loanPayments;
+    categorySplitMap[loanCatId].value += loanPayments;
   }
 
-  // Adding Credit Card billings that we are actually paying this month (which consists of individual charges from last month's statement!)
-  // For maximum fidelity, let's dissect the components of the card statement we are paying this month
-  creditCards.forEach(card => {
-    const prevStatement = computeCardStatementsForMonth(creditCards, transactions, installments, prevMonthStr)
-      .find(s => s.cardId === card.id);
-    if (prevStatement && prevStatement.billingBalance > 0) {
-      prevStatement.detailedCharges.forEach(charge => {
-        // Find category if regular transaction
-        let chargeCatId = 'cat-other';
-        let chargeCatName = 'Cargos Tarjeta de Crédito';
-        let chargeCatColor = '#6B7280';
-        
-        // Find matching original transaction to extract category
-        const origTx = transactions.find(t => t.id === charge.id);
-        if (origTx) {
-          chargeCatId = origTx.category;
-          const catObj = categories.find(c => c.id === chargeCatId);
-          chargeCatName = catObj ? catObj.name : 'Otros';
-          chargeCatColor = catObj ? catObj.color : '#6B7280';
-        } else if (charge.isInstallment) {
-          // If installment, try to match the base installment purchase to classify or mark as "Ocio/Tecnología"
-          const basePurchase = installments.find(inst => inst.id === charge.id.split('-inst-')[0]);
-          if (basePurchase) {
-            chargeCatId = 'cat-leisure';
-            chargeCatName = 'Plazos (' + basePurchase.description + ')';
-            chargeCatColor = '#F59E0B';
-          }
-        }
-
-        if (!categorySplitMap[chargeCatId]) {
-          categorySplitMap[chargeCatId] = { name: chargeCatName, value: 0, color: chargeCatColor };
-        }
-        categorySplitMap[chargeCatId].value += charge.amount;
-      });
+  // Adding Credit card payments split
+  activePeriodMonths.forEach(mStr => {
+    const [mY, mMonth] = mStr.split('-');
+    let prevYr = parseInt(mY, 10);
+    let prevM = parseInt(mMonth, 10) - 1;
+    if (prevM === 0) {
+      prevM = 12;
+      prevYr -= 1;
     }
+    const prevMStr = `${prevYr}-${String(prevM).padStart(2, '0')}`;
+
+    creditCards.forEach(card => {
+      const prevStatement = computeCardStatementsForMonth(creditCards, transactions, installments, prevMStr)
+        .find(s => s.cardId === card.id);
+      if (prevStatement && prevStatement.billingBalance > 0) {
+        prevStatement.detailedCharges.forEach(charge => {
+          let chargeCatId = 'cat-other';
+          let chargeCatName = 'Cargos Tarjeta de Crédito';
+          let chargeCatColor = '#6B7280';
+          
+          const origTx = transactions.find(t => t.id === charge.id);
+          if (origTx) {
+            chargeCatId = origTx.category;
+            const catObj = categories.find(c => c.id === chargeCatId);
+            chargeCatName = catObj ? catObj.name : 'Otros';
+            chargeCatColor = catObj ? catObj.color : '#6B7280';
+          } else if (charge.isInstallment) {
+            const basePurchase = installments.find(inst => inst.id === charge.id.split('-inst-')[0]);
+            if (basePurchase) {
+              chargeCatId = 'cat-leisure';
+              chargeCatName = 'Plazos (' + basePurchase.description + ')';
+              chargeCatColor = '#F59E0B';
+            }
+          }
+
+          if (!categorySplitMap[chargeCatId]) {
+            categorySplitMap[chargeCatId] = { name: chargeCatName, value: 0, color: chargeCatColor };
+          }
+          categorySplitMap[chargeCatId].value += charge.amount;
+        });
+      }
+    });
   });
 
   const pieData = Object.values(categorySplitMap).filter(item => item.value > 0);
 
-  // 12-Month Cashflow Graph Preparation (simulating/retrieving values across months to plot beautiful trend chart)
-  // Let's generate a list of the last 6 months to display
+  // 12-Month Cashflow Graph Preparation
   const cashflowTrendData = [];
   const currentMonthNum = parseInt(month, 10);
   const currentYearNum = parseInt(year, 10);
 
-  for (let j = -5; j <= 1; j++) { // from 5 months ago to next month projection
+  for (let j = -5; j <= 1; j++) {
     let trendMonthNum = currentMonthNum + j;
     let trendYearNum = currentYearNum;
 
@@ -159,24 +192,20 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
 
     const tMonthStr = `${trendYearNum}-${String(trendMonthNum).padStart(2, '0')}`;
     
-    // Incomes for this trend month
     const incVal = transactions
       .filter(t => t.month === tMonthStr && t.type === 'income')
       .reduce((sum, t) => sum + t.amount, 0);
 
-    // Direct Expenses
     const dirExp = transactions
       .filter(t => t.month === tMonthStr && t.type === 'expense' && t.paymentMethod !== 'credit')
       .reduce((sum, t) => sum + t.amount, 0);
 
-    // Loan Payments
     const loanP = installments
       .filter(inst => inst.type === 'loan')
       .flatMap(inst => getProjectedInstallments(inst))
       .filter(p => p.chargeMonth === tMonthStr)
       .reduce((sum, p) => sum + p.monthlyAmount, 0);
 
-    // Credit Card payments paid in this trend month (closing in previous cycle month)
     let tcBillingMonthNum = trendMonthNum - 1;
     let tcBillingYearNum = trendYearNum;
     if (tcBillingMonthNum === 0) {
@@ -205,24 +234,53 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
     });
   }
 
-  // Active status items
   const totalCreditLimit = creditCards.reduce((sum, c) => sum + c.limit, 0);
   
-  // Outstanding current billing balances closing in THIS selectedMonth (unpaid yet, closes this month)
+  // Outstanding billing balances closing in active period
   let pendingClosingCharges = 0;
-  const tdcStatementsThisMonth = computeCardStatementsForMonth(creditCards, transactions, installments, selectedMonth);
-  tdcStatementsThisMonth.forEach(st => {
-    pendingClosingCharges += st.billingBalance;
+  activePeriodMonths.forEach(mStr => {
+    const tdcStatements = computeCardStatementsForMonth(creditCards, transactions, installments, mStr);
+    tdcStatements.forEach(st => {
+      pendingClosingCharges += st.billingBalance;
+    });
   });
 
   return (
     <div className="space-y-6" id="dashboard-section">
       {/* Title block */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-slate-100">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-slate-100 gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-slate-800 tracking-tight">financial planner MZ</h1>
-          <p className="text-sm text-slate-500">Panel Ejecutivo de Control - Período: <strong className="text-slate-700">{monthLabel}</strong></p>
+          <p className="text-sm text-slate-500">
+            Panel Ejecutivo de Control - Período: <strong className="text-slate-700">{monthLabel}</strong>
+            {viewType === 'cumulative' && <span className="ml-2 px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold">VISTA ACUMULADA ANUAL</span>}
+          </p>
         </div>
+
+        {/* View Selection Toggle */}
+        <div className="bg-slate-100 p-1 rounded-xl border border-slate-200/60 flex items-center gap-1 self-start sm:self-auto shadow-2xs">
+          <button
+            onClick={() => setViewType('monthly')}
+            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+              viewType === 'monthly'
+                ? 'bg-white text-slate-800 shadow-xs'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            Vista Mensual
+          </button>
+          <button
+            onClick={() => setViewType('cumulative')}
+            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+              viewType === 'cumulative'
+                ? 'bg-white text-slate-800 shadow-xs'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            Acumulado Anual
+          </button>
+        </div>
+
         <div className="mt-3 sm:mt-0 flex gap-2">
           <button 
             onClick={() => onNavigate('presupuesto')}
@@ -415,7 +473,7 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
               </button>
             </h2>
             <p className="text-xs text-slate-400 mb-4 py-1.5 px-3 bg-blue-50/50 rounded-lg text-blue-800">
-              Corresponden a los consumos cerrados al corte de {monthNamesEs[prevMonth - 1]}.
+              Corresponden a los consumos cargados del ciclo de facturación anterior.
             </p>
             
             <div className="space-y-3">
@@ -444,11 +502,11 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
           </div>
         </div>
 
-        {/* Bank accounts/Debit cards balances info */}
-        <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-xs flex flex-col justify-between">
+        {/* Bank accounts/Debit cards balances info with dynamic rollover */}
+        <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-xs flex flex-col justify-between" id="dash-rollover-accounts">
           <div>
             <h2 className="text-sm font-semibold text-slate-700 mb-3 tracking-tight flex items-center justify-between">
-              <span>Saldos y Disponibilidad</span>
+              <span>Saldos y Proyección de Cuentas</span>
               <button 
                 onClick={() => onNavigate('cuentas')} 
                 className="text-xs font-normal text-slate-500 hover:text-slate-800 flex items-center gap-0.5 whitespace-nowrap"
@@ -458,34 +516,63 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
               </button>
             </h2>
             <p className="text-xs text-slate-400 mb-4 py-1.5 px-3 bg-emerald-50/50 rounded-lg text-emerald-800">
-              Tus fondos líquidos disponibles y cuentas registradas.
+              Muestra el Saldo Inicial, variaciones en el mes y el Saldo Final proyectado.
             </p>
 
             <div className="space-y-3">
-              {debitCards.map((bank, i) => (
-                <div key={i} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100/50 transition-colors">
-                  <div className="flex items-center gap-2">
-                    <div className="p-2 bg-emerald-100/50 rounded-md text-emerald-600">
-                      <Wallet className="w-3.5 h-3.5" />
+              {debitCards.map((bank, i) => {
+                const flow = accountFlows[bank.id] || { initialBalance: bank.balance, finalBalance: bank.balance, incomes: 0, expenses: 0 };
+                const netVariance = flow.incomes - flow.expenses;
+                return (
+                  <div key={i} className="p-3 bg-slate-50 border border-slate-100/60 rounded-xl hover:bg-slate-150/20 transition-all">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="p-2 bg-emerald-100/30 rounded-md text-emerald-600">
+                          <Wallet className="w-3.5 h-3.5" />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-semibold text-slate-700 truncate max-w-[120px]">{bank.name}</h4>
+                          <span className="text-[9px] text-slate-400 font-medium">Débito / Disponible</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[9px] text-slate-400 block uppercase font-mono">Saldo Final</span>
+                        <span className="text-sm font-bold text-emerald-600">${flow.finalBalance.toLocaleString()}</span>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="text-xs font-semibold text-slate-700">{bank.name}</h4>
-                      <span className="text-[9px] text-slate-400 uppercase tracking-widest font-medium">Débito / Fondos</span>
+                    
+                    {/* Rollover connection representation */}
+                    <div className="mt-2.5 pt-2 border-t border-slate-200/60 grid grid-cols-2 gap-2 text-[10px] text-slate-600">
+                      <div>
+                        <span className="text-[9px] text-slate-400 block tracking-tight">Saldo Inicial:</span>
+                        <span className="font-semibold text-slate-700">${flow.initialBalance.toLocaleString()}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[9px] text-slate-400 block tracking-tight">Movimiento Neto:</span>
+                        <span className={`font-semibold ${netVariance >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+                          {netVariance >= 0 ? '+' : ''}${netVariance.toLocaleString()}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-sm font-bold text-emerald-600">${bank.balance.toLocaleString()}</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>Disponibilidad líquida total:</span>
-            <span className="font-semibold text-emerald-600">
-              ${debitCards.reduce((sum, d) => sum + d.balance, 0).toLocaleString()}
-            </span>
+          <div className="mt-5 pt-3 border-t border-slate-100 flex flex-col gap-1.5 text-xs text-slate-500">
+            <div className="flex items-center justify-between">
+              <span>Disponibilidad Inicial Total ({monthNamesEs[parseInt(month, 10) - 1]}):</span>
+              <span className="font-semibold text-slate-600">
+                ${debitCards.reduce((sum, d) => sum + (accountFlows[d.id]?.initialBalance ?? d.balance), 0).toLocaleString()}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-sm pt-1">
+              <span className="font-semibold text-slate-700">Disponibilidad Final Proyectada:</span>
+              <span className="font-bold text-emerald-600">
+                ${debitCards.reduce((sum, d) => sum + (accountFlows[d.id]?.finalBalance ?? d.balance), 0).toLocaleString()}
+              </span>
+            </div>
           </div>
         </div>
       </div>

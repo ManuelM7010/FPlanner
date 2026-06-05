@@ -218,3 +218,99 @@ export function computeCardStatementsForMonth(
 
   return summaries;
 }
+
+export interface MonthlyAccountFlow {
+  cardId: string;
+  cardName: string;
+  initialBalance: number;
+  incomes: number;
+  expenses: number;
+  finalBalance: number;
+}
+
+/**
+ * Calculates month-by-month starting and ending balances for bank accounts (debit cards)
+ * by rolling forward cashflows starting from January 2025.
+ */
+export function computeMonthlyAccountBalances(
+  debitCards: any[],
+  transactions: Transaction[],
+  targetMonth: string // YYYY-MM
+): Record<string, MonthlyAccountFlow> {
+  const [targetYearStr, targetMonthStr] = targetMonth.split('-');
+  const targetYear = parseInt(targetYearStr, 10);
+  const targetMonthNum = parseInt(targetMonthStr, 10);
+
+  // Initialize the balances of all cards to their baseline start balances (January 2025)
+  const currentBalances: Record<string, number> = {};
+  debitCards.forEach(d => {
+    currentBalances[d.id] = d.balance;
+  });
+
+  const flows: Record<string, MonthlyAccountFlow> = {};
+
+  const startYear = 2025;
+  const startMonth = 1;
+
+  let currentYear = startYear;
+  let currentMonth = startMonth;
+
+  while (true) {
+    const activeMonthStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+
+    const monthIncomes: Record<string, number> = {};
+    const monthExpenses: Record<string, number> = {};
+
+    debitCards.forEach(d => {
+      monthIncomes[d.id] = 0;
+      monthExpenses[d.id] = 0;
+    });
+
+    // Sum transactions for this month
+    transactions.forEach(t => {
+      if (t.month === activeMonthStr && t.cardId) {
+        if (t.paymentMethod === 'debit' || t.paymentMethod === 'transfer' || t.paymentMethod === 'cash') {
+          if (t.type === 'income') {
+            monthIncomes[t.cardId] = (monthIncomes[t.cardId] || 0) + t.amount;
+          } else {
+            monthExpenses[t.cardId] = (monthExpenses[t.cardId] || 0) + t.amount;
+          }
+        }
+      }
+    });
+
+    debitCards.forEach(d => {
+      const initBal = currentBalances[d.id] || 0;
+      const inc = monthIncomes[d.id] || 0;
+      const exp = monthExpenses[d.id] || 0;
+      const finBal = initBal + inc - exp;
+
+      if (activeMonthStr === targetMonth) {
+        flows[d.id] = {
+          cardId: d.id,
+          cardName: d.name,
+          initialBalance: Number(initBal.toFixed(2)),
+          incomes: Number(inc.toFixed(2)),
+          expenses: Number(exp.toFixed(2)),
+          finalBalance: Number(finBal.toFixed(2))
+        };
+      }
+
+      // Roll forward balance
+      currentBalances[d.id] = finBal;
+    });
+
+    if (currentYear === targetYear && currentMonth === targetMonthNum) {
+      break;
+    }
+
+    currentMonth += 1;
+    if (currentMonth > 12) {
+      currentMonth = 1;
+      currentYear += 1;
+    }
+  }
+
+  return flows;
+}
+
