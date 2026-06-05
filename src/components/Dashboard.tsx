@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { 
   DollarSign, TrendingUp, TrendingDown, PiggyBank, CreditCard, Wallet, 
-  AlertCircle, ChevronRight, Briefcase, Sparkles 
+  AlertCircle, ChevronRight, Briefcase, Sparkles, Home, Calendar, Info
 } from 'lucide-react';
 import { AppState, Transaction, InstallmentPurchase } from '../types';
 import { getProjectedInstallments, computeCardStatementsForMonth, computeMonthlyAccountBalances } from '../utils/financeUtils';
@@ -45,7 +45,19 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
 
   // 2. CASH OUTFLOWS (Direct Expenses paid with cash, debit, transfer in active period)
   const directExpenses = transactions
-    .filter(t => activePeriodMonths.includes(t.month) && t.type === 'expense' && t.paymentMethod !== 'credit')
+    .filter(t => {
+      if (!activePeriodMonths.includes(t.month) || t.type !== 'expense' || t.paymentMethod === 'credit') {
+        return false;
+      }
+      // Evitar doble conteo: si la transacción proviene de una cuota de préstamo, se calcula por separado en loanPayments
+      if (t.installmentId) {
+        const inst = installments.find(i => i.id === t.installmentId);
+        if (inst && inst.type === 'loan') {
+          return false;
+        }
+      }
+      return true;
+    })
     .reduce((sum, t) => sum + t.amount, 0);
 
   // 3. LOANS paid strictly in active period
@@ -95,6 +107,46 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
   const totalOutflows = directExpenses + loanPayments + totalCardPaymentsDue;
   const netSavings = monthlyIncomes - totalOutflows;
   const savingsRate = monthlyIncomes > 0 ? (netSavings / monthlyIncomes) * 100 : 0;
+
+  // New accurate calculations for "Gasto Mensual Proyectado" (Total Consumption)
+  const totalProjectedExpenses = transactions
+    .filter(t => activePeriodMonths.includes(t.month) && t.type === 'expense')
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const projectedSavings = monthlyIncomes - totalProjectedExpenses;
+  const projectedSavingsRate = monthlyIncomes > 0 ? (projectedSavings / monthlyIncomes) * 100 : 0;
+
+  // Classification for breakdown lists
+  const activeExpenses = transactions.filter(t => activePeriodMonths.includes(t.month) && t.type === 'expense');
+
+  // Group 1: Vivienda / Alquiler
+  const housingTxs = activeExpenses.filter(t => 
+    t.category === 'cat-housing' || 
+    t.description.toLowerCase().includes('alquiler') || 
+    t.description.toLowerCase().includes('rent') ||
+    t.description.toLowerCase().includes('flat')
+  );
+  const housingExpenses = housingTxs.reduce((sum, t) => sum + t.amount, 0);
+
+  // Group 2: Suscripciones y servicios fijos (Netflix, gym etc.)
+  const subTxs = activeExpenses.filter(t => 
+    (t.category === 'cat-subscriptions' || !!t.subscriptionId || (t.isFixed && t.category !== 'cat-housing')) &&
+    !(t.category === 'cat-housing' || t.description.toLowerCase().includes('alquiler') || t.description.toLowerCase().includes('rent') || t.description.toLowerCase().includes('flat')) &&
+    !t.installmentId
+  );
+  const subscriptionExpenses = subTxs.reduce((sum, t) => sum + t.amount, 0);
+
+  // Group 3: Préstamos y cuotas a plazos
+  const installmentTxs = activeExpenses.filter(t => t.category === 'cat-installments' || !!t.installmentId);
+  const installmentsExpenses = installmentTxs.reduce((sum, t) => sum + t.amount, 0);
+
+  // Group 4: Variables y otros consumos ordinarios
+  const otherTxs = activeExpenses.filter(t => 
+    !housingTxs.includes(t) && 
+    !subTxs.includes(t) && 
+    !installmentTxs.includes(t)
+  );
+  const otherExpenses = otherTxs.reduce((sum, t) => sum + t.amount, 0);
 
   // Account flows for the selectedMonth balance rollover logic
   const accountFlows = computeMonthlyAccountBalances(debitCards, transactions, selectedMonth);
@@ -306,11 +358,11 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
         {/* KPI: Incomes */}
         <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-xs flex items-start justify-between" id="kpi-incomes">
           <div className="space-y-1.5">
-            <span className="text-xs font-medium uppercase text-slate-400 tracking-wider">Ingresos Totales</span>
-            <div className="text-2xl font-semibold text-emerald-600">${monthlyIncomes.toLocaleString()}</div>
-            <p className="text-xs text-slate-500 flex items-center gap-1">
+            <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider">Ingresos Planificados</span>
+            <div className="text-2xl font-bold text-emerald-600">${monthlyIncomes.toLocaleString()}</div>
+            <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
               <TrendingUp className="w-3 h-3 text-emerald-500" />
-              Sueldos y otros fijos
+              Sueldos y otros ingresos fijos
             </p>
           </div>
           <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-lg">
@@ -318,14 +370,29 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
           </div>
         </div>
 
+        {/* KPI: Gasto Mensual Proyectado */}
+        <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-xs flex items-start justify-between" id="kpi-projected-expenses">
+          <div className="space-y-1.5">
+            <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider">Gasto Proyectado (Total)</span>
+            <div className="text-2xl font-bold text-indigo-600">${totalProjectedExpenses.toLocaleString()}</div>
+            <p className="text-[11px] font-medium text-slate-500 flex items-center gap-1" title="Suma compromisos incurridos o fijos de este mes">
+              <Sparkles className="w-3 h-3 text-indigo-500" />
+              Compromisos, fijos y variables
+            </p>
+          </div>
+          <div className="p-2.5 bg-indigo-50 text-indigo-650 rounded-lg">
+            <Sparkles className="w-5 h-5" />
+          </div>
+        </div>
+
         {/* KPI: Cash Outflows (Real Expenses Paid) */}
         <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-xs flex items-start justify-between" id="kpi-expenses">
           <div className="space-y-1.5">
-            <span className="text-xs font-medium uppercase text-slate-400 tracking-wider">Egresos Reales</span>
-            <div className="text-2xl font-semibold text-rose-600">${totalOutflows.toLocaleString()}</div>
-            <p className="text-xs text-slate-500 flex items-center gap-1">
+            <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider">Egresos Reales (Flujo)</span>
+            <div className="text-2xl font-bold text-rose-600">${totalOutflows.toLocaleString()}</div>
+            <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
               <TrendingDown className="w-3 h-3 text-rose-400" />
-              Directos, préstamos y TDC
+              Directos + Cuota Préstamo + TDC
             </p>
           </div>
           <div className="p-2.5 bg-rose-50 text-rose-600 rounded-lg">
@@ -336,32 +403,164 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
         {/* KPI: Savings */}
         <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-xs flex items-start justify-between" id="kpi-savings">
           <div className="space-y-1.5">
-            <span className="text-xs font-medium uppercase text-slate-400 tracking-wider">Flujo de Dinero / Ahorro</span>
-            <div className={`text-2xl font-semibold ${netSavings >= 0 ? 'text-blue-600' : 'text-amber-600'}`}>
-              ${netSavings.toLocaleString()}
+            <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider">Ahorro Proyectado</span>
+            <div className={`text-2xl font-bold ${projectedSavings >= 0 ? 'text-blue-600' : 'text-amber-600'}`}>
+              ${projectedSavings.toLocaleString()}
             </div>
-            <div className="text-xs text-slate-500 flex items-center gap-1">
+            <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
               <PiggyBank className="w-3 h-3 text-blue-500" />
-              Tasa de ahorro: <span className="font-semibold">{savingsRate.toFixed(1)}%</span>
+              Tasa de ahorro: <span className="font-bold text-blue-600">{projectedSavingsRate.toFixed(1)}%</span>
             </div>
           </div>
-          <div className={`p-2.5 rounded-lg ${netSavings >= 0 ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
+          <div className={`p-2.5 rounded-lg ${projectedSavings >= 0 ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
             <PiggyBank className="w-5 h-5" />
           </div>
         </div>
+      </div>
 
-        {/* KPI: Pending Card billing closed this month */}
-        <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-xs flex items-start justify-between" id="kpi-card-closing">
-          <div className="space-y-1.5">
-            <span className="text-xs font-medium uppercase text-slate-400 tracking-wider">Cierre TDC del Mes</span>
-            <div className="text-2xl font-semibold text-slate-700">${pendingClosingCharges.toLocaleString()}</div>
-            <div className="text-xs text-slate-500 flex items-center gap-1">
-              <CreditCard className="w-3 h-3 text-slate-400" />
-              Deuda de corte a pagar en prox. mes
+      {/* Estructura y Consumo del Gasto Proyectado */}
+      <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-xs" id="dash-projected-structure">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-3 border-b border-slate-100 gap-2 mb-4">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-800 tracking-tight flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-indigo-500" />
+              <span>Estructura y Consumo del Gasto Proyectado ({monthLabel})</span>
+            </h2>
+            <p className="text-[11px] text-slate-400 font-medium">Visualización detallada de tus compromisos fijos (Alquiler, suscripciones) y variables en el mes.</p>
+          </div>
+          <div className="flex bg-slate-50 p-1 rounded-lg border border-slate-200/50 text-[10px] text-slate-500 gap-2 font-semibold">
+            <span>Fijos/Servicios: <strong className="text-indigo-600">${(subscriptionExpenses + housingExpenses).toLocaleString()}</strong></span>
+            <span className="text-slate-300">|</span>
+            <span>Cuotas/Préstamos: <strong className="text-rose-600">${installmentsExpenses.toLocaleString()}</strong></span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Grupo 1: Alquiler / Vivienda */}
+          <div className="bg-slate-50/60 p-4 border border-slate-100/60 rounded-xl hover:bg-slate-100/20 transition-all flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <div className="p-1.5 bg-blue-50 text-blue-600 rounded">
+                  <Home className="w-3.5 h-3.5" />
+                </div>
+                <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider block">1. Vivienda y Alquiler</span>
+              </div>
+              <p className="text-[10px] text-slate-400 font-medium leading-relaxed mb-3">Tus costos de vivienda habitual, alquiler mensual y residenciales.</p>
+              
+              <div className="space-y-1.5 max-h-24 overflow-y-auto pr-1">
+                {housingTxs.length === 0 ? (
+                  <span className="text-[10px] text-slate-400 italic block">Sin gastos este mes</span>
+                ) : (
+                  housingTxs.map((t, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-[11px]">
+                      <span className="text-slate-650 truncate max-w-[110px]" title={t.description}>{t.description}</span>
+                      <span className="font-bold text-slate-800">${t.amount.toLocaleString()}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            
+            <div className="mt-4 pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs">
+              <span className="text-slate-450 font-bold">Total Vivienda:</span>
+              <span className="font-bold text-blue-600">${housingExpenses.toLocaleString()}</span>
             </div>
           </div>
-          <div className="p-2.5 bg-slate-50 text-slate-600 rounded-lg">
-            <CreditCard className="w-5 h-5" />
+
+          {/* Grupo 2: Suscripciones y planes recurrentes */}
+          <div className="bg-slate-50/60 p-4 border border-slate-100/60 rounded-xl hover:bg-slate-100/20 transition-all flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded">
+                  <Sparkles className="w-3.5 h-3.5" />
+                </div>
+                <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block">2. Suscripciones y Fijos</span>
+              </div>
+              <p className="text-[10px] text-slate-400 font-medium leading-relaxed mb-3">Servicios fijos, membresías y planes recurrentes mensuales.</p>
+              
+              <div className="space-y-1.5 max-h-24 overflow-y-auto pr-1">
+                {subTxs.length === 0 ? (
+                  <span className="text-[10px] text-slate-400 italic block">Sin planes en vigencia</span>
+                ) : (
+                  subTxs.map((t, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-[11px]">
+                      <span className="text-slate-650 truncate max-w-[110px]" title={t.description}>{t.description}</span>
+                      <span className="font-bold text-slate-800">${t.amount.toLocaleString()}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            
+            <div className="mt-4 pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs">
+              <span className="text-slate-450 font-bold">Total Fijos:</span>
+              <span className="font-bold text-indigo-600">${subscriptionExpenses.toLocaleString()}</span>
+            </div>
+          </div>
+
+          {/* Grupo 3: Préstamos y plazos / cuotas */}
+          <div className="bg-slate-50/60 p-4 border border-slate-100/60 rounded-xl hover:bg-slate-100/20 transition-all flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <div className="p-1.5 bg-rose-50 text-rose-600 rounded">
+                  <CreditCard className="w-3.5 h-3.5" />
+                </div>
+                <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wider block">3. Préstamos y Cuotas</span>
+              </div>
+              <p className="text-[10px] text-slate-400 font-medium leading-relaxed mb-3">Compromisos de préstamos personales, hipotecas y plazos de TDC.</p>
+              
+              <div className="space-y-1.5 max-h-24 overflow-y-auto pr-1">
+                {installmentTxs.length === 0 ? (
+                  <span className="text-[10px] text-slate-400 italic block">Sin cuotas planificadas</span>
+                ) : (
+                  installmentTxs.map((t, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-[11px]">
+                      <span className="text-slate-650 truncate max-w-[110px]" title={t.description}>{t.description}</span>
+                      <span className="font-bold text-slate-800">${t.amount.toLocaleString()}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            
+            <div className="mt-4 pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs">
+              <span className="text-slate-450 font-bold">Total Cuotas:</span>
+              <span className="font-bold text-rose-600">${installmentsExpenses.toLocaleString()}</span>
+            </div>
+          </div>
+
+          {/* Grupo 4: Consumo Variable */}
+          <div className="bg-slate-50/60 p-4 border border-slate-100/60 rounded-xl hover:bg-slate-100/20 transition-all flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <div className="p-1.5 bg-slate-100 text-slate-600 rounded">
+                  <Wallet className="w-3.5 h-3.5" />
+                </div>
+                <span className="text-[10px] font-bold text-slate-650 uppercase tracking-wider block">4. Gastos Variables</span>
+              </div>
+              <p className="text-[10px] text-slate-400 font-medium leading-relaxed mb-3">Alimentación, transporte, ocio, cuidado personal y consumos casuales.</p>
+              
+              <div className="space-y-1.5 max-h-24 overflow-y-auto pr-1">
+                {otherTxs.length === 0 ? (
+                  <span className="text-[10px] text-slate-400 italic block">Sin gastos registrados</span>
+                ) : (
+                  otherTxs.slice(0, 5).map((t, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-[11px]">
+                      <span className="text-slate-650 truncate max-w-[110px]" title={t.description}>{t.description}</span>
+                      <span className="font-bold text-slate-800">${t.amount.toLocaleString()}</span>
+                    </div>
+                  ))
+                )}
+                {otherTxs.length > 5 && (
+                  <div className="text-[9px] text-slate-400 italic text-right">+ {otherTxs.length - 5} gastos variables</div>
+                )}
+              </div>
+            </div>
+            
+            <div className="mt-4 pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs">
+              <span className="text-slate-450 font-bold">Total Variable:</span>
+              <span className="font-bold text-slate-650">${otherExpenses.toLocaleString()}</span>
+            </div>
           </div>
         </div>
       </div>

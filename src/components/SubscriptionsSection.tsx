@@ -134,17 +134,16 @@ export default function SubscriptionsSection({
 
   return (
     <div className="space-y-6" id="subscriptions-section">
-      
-      {/* Upper header */}
+       {/* Upper header */}
       <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-xs">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
               <Sparkles className="w-5.5 h-5.5 text-indigo-500" />
-              Suscripciones y Planes de Gasto (Suscripciones/Planes)
+              Suscripciones y Gastos Fijos (Planes Fijos Recurrentes)
             </h1>
             <p className="text-xs text-slate-500 mt-1 max-w-2xl">
-              Aquí puedes definir servicios fijos mensuales (como Netflix, Spotify, Planes telefónicos o Salón de belleza recurrente). Los planes especificados se cargarán <strong>automáticamente</strong> en tus gastos del mes para el día seleccionado, donde después podrás reajustar su fecha de pago real directamente en la sección de Presupuesto.
+              Aquí puedes definir servicios fijos mensuales y gastos fijos recurrentes (como el **Alquiler del apartamento**, Netflix, Internet, Gimnasio o Colegio). Los planes especificados se proyectarán y cargarán <strong>automáticamente</strong> en tus gastos y presupuesto de cada mes, ayudándote con la planificación mes a mes.
             </p>
           </div>
           <div className="bg-indigo-50 border border-indigo-100 p-2.5 rounded-lg flex items-center gap-2 text-xs text-indigo-950 font-medium whitespace-nowrap">
@@ -161,7 +160,7 @@ export default function SubscriptionsSection({
           <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-xs">
             <h2 className="text-sm font-semibold text-slate-800 tracking-tight flex items-center gap-2 mb-4 pb-2 border-b border-slate-55">
               <Plus className="w-4 h-4 text-slate-650" />
-              <span>Nuevo Plan / Suscripción</span>
+              <span>Nuevo Gasto Fijo / Suscripción</span>
             </h2>
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs font-medium text-slate-700">
@@ -169,11 +168,11 @@ export default function SubscriptionsSection({
               {/* Name */}
               <div className="space-y-1.5">
                 <label className="flex items-center gap-1.5 text-slate-500">
-                  <FileText className="w-3.5 h-3.5" /> Nombre del Servicio / Gasto
+                   <FileText className="w-3.5 h-3.5" /> Nombre del Servicio / Gasto Fijo
                 </label>
                 <input 
                   type="text"
-                  placeholder="Ej. Netflix, Spotify, Gimnasio, Salón de belleza"
+                  placeholder="Ej. Alquiler de Apartamento, Netflix, Internet, Gimnasio"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400 text-slate-800 font-normal"
