@@ -33,6 +33,7 @@ export interface Transaction {
   date: string;    // YYYY-MM-DD
   month: string;   // YYYY-MM (budget month classification)
   isFixed: boolean;
+  subscriptionId?: string; // Links back to subscription template
 }
 
 export interface InstallmentPurchase {
@@ -48,6 +49,17 @@ export interface InstallmentPurchase {
   monthlyPayment: number; // Payment amount per month
 }
 
+export interface Subscription {
+  id: string;
+  name: string;
+  amount: number;
+  category: string; // ID of category
+  paymentMethod: PaymentMethod;
+  cardId?: string; // Links to card or account ID
+  dayOfMonth: number; // 1-31
+  activeMonths: string[]; // List of YYYY-MM month strings
+}
+
 export interface AppState {
   transactions: Transaction[];
   creditCards: CreditCard[];
@@ -55,4 +67,5 @@ export interface AppState {
   installments: InstallmentPurchase[];
   categories: Category[];
   selectedMonth: string; // YYYY-MM
+  subscriptions?: Subscription[]; // Lists user subscription planes templates
 }

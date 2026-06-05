@@ -10,15 +10,21 @@ interface BudgetSectionProps {
   onAddTransaction: (tx: Omit<Transaction, 'id'>) => void;
   onDeleteTransaction: (id: string) => void;
   onAddCategory: (cat: Category) => void;
+  onUpdateTransaction?: (id: string, updated: Partial<Transaction>) => void;
 }
 
 export default function BudgetSection({ 
   state, 
   onAddTransaction, 
   onDeleteTransaction, 
-  onAddCategory 
+  onAddCategory,
+  onUpdateTransaction
 }: BudgetSectionProps) {
   const { transactions, creditCards, debitCards, categories, selectedMonth } = state;
+
+  // Inline editing states
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingDate, setEditingDate] = useState<string>('');
 
   // Local form states
   const [description, setDescription] = useState('');
@@ -389,7 +395,43 @@ export default function BudgetSection({
                     return (
                       <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors group">
                         <td className="py-3 text-slate-400 font-mono text-[11px] whitespace-nowrap">
-                          {tx.date}
+                          {editingId === tx.id ? (
+                            <div className="flex items-center gap-1">
+                              <input 
+                                type="date"
+                                value={editingDate}
+                                onChange={(e) => setEditingDate(e.target.value)}
+                                className="px-1.5 py-0.5 border border-slate-300 rounded text-[10px] text-slate-800 bg-white"
+                                required
+                              />
+                              <button 
+                                onClick={() => {
+                                  if (editingDate && onUpdateTransaction) {
+                                    onUpdateTransaction(tx.id, { date: editingDate });
+                                  }
+                                  setEditingId(null);
+                                }}
+                                className="p-1 bg-emerald-50 text-emerald-600 rounded border border-emerald-100 hover:bg-emerald-100"
+                                title="Guardar fecha"
+                              >
+                                <Check className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 group/row">
+                              <span>{tx.date}</span>
+                              <button 
+                                onClick={() => {
+                                  setEditingId(tx.id);
+                                  setEditingDate(tx.date);
+                                }}
+                                className="text-slate-400 hover:text-slate-750 opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+                                title="Editar fecha exacta"
+                              >
+                                <Calendar className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
                         </td>
                         <td className="py-3 pr-2">
                           <div className="font-semibold text-slate-700 flex items-center gap-1.5">

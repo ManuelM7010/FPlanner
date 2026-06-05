@@ -18,6 +18,7 @@ export default function InstallmentsSection({
   onDeleteInstallment 
 }: InstallmentsSectionProps) {
   const { installments, creditCards, selectedMonth } = state;
+  const [selectedYearStr] = selectedMonth.split('-');
 
   // Local Form State
   const [description, setDescription] = useState('');
@@ -373,6 +374,84 @@ export default function InstallmentsSection({
               })}
             </div>
           )}
+        </div>
+
+        {/* Dynamic Annual Projection Bento Grid */}
+        <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-xs">
+          <div className="pb-3 border-b border-slate-100 mb-4 flex justify-between items-center">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-800 tracking-tight">Proyección del Cronograma Anual ({selectedYearStr})</h2>
+              <p className="text-[11px] text-slate-400 font-medium">Visualiza el consolidado de cuotas y préstamos para todo el año en curso</p>
+            </div>
+            <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-xl font-bold uppercase tracking-wider font-mono">PROYECTADO</span>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+            {(() => {
+              const months = Array.from({ length: 12 }, (_, i) => {
+                const mNum = String(i + 1).padStart(2, '0');
+                return `${selectedYearStr}-${mNum}`;
+              });
+
+              const monthNamesEs = [
+                'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+              ];
+
+              return months.map((mStr, idx) => {
+                let totalValue = 0;
+                const details: { description: string; amount: number; index: number; total: number; type: string }[] = [];
+
+                installments.forEach(item => {
+                  const projections = getProjectedInstallments(item);
+                  const match = projections.find(p => p.chargeMonth === mStr);
+                  if (match) {
+                    totalValue += match.monthlyAmount;
+                    details.push({
+                      description: item.description,
+                      amount: match.monthlyAmount,
+                      index: match.installmentIndex,
+                      total: item.installments,
+                      type: item.type
+                    });
+                  }
+                });
+
+                const hasItems = details.length > 0;
+                const isCurrentMonthTab = mStr === selectedMonth;
+
+                return (
+                  <div 
+                    key={mStr} 
+                    className={`p-3 rounded-lg border transition-all ${isCurrentMonthTab ? 'ring-2 ring-indigo-500 bg-indigo-50/15 border-indigo-200' : 'bg-slate-50/40 border-slate-100 hover:bg-slate-50/80'}`}
+                  >
+                    <div className="flex justify-between items-center text-[10px] text-slate-500 font-bold">
+                      <span>{monthNamesEs[idx]}</span>
+                      {isCurrentMonthTab && <span className="bg-indigo-600 text-white text-[8px] px-1 rounded uppercase tracking-wider">Activo</span>}
+                    </div>
+                    <span className={`text-sm font-extrabold mt-1 block ${hasItems ? 'text-slate-800' : 'text-slate-350'}`}>
+                      ${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    
+                    {hasItems ? (
+                      <div className="mt-2 pt-2 border-t border-slate-200/50 space-y-1 max-h-24 overflow-y-auto scrollbar-thin">
+                        {details.map((dt, sIdx) => (
+                          <div key={sIdx} className="text-[9px] flex justify-between gap-1 text-slate-650 font-medium">
+                            <span className="truncate" title={`${dt.description} (#${dt.index}/${dt.total})`}>
+                              {dt.description} <span className="text-slate-400">({dt.index}/{dt.total})</span>
+                            </span>
+                            <span className="font-bold shrink-0 text-slate-700">${dt.amount.toFixed(0)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-[9px] text-slate-400 block mt-1 font-normal italic">Sin deudas</span>
+                    )}
+                  </div>
+                );
+              });
+            })()}
+          </div>
         </div>
       </div>
     </div>

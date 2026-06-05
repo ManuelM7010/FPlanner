@@ -4,7 +4,7 @@ import {
   Calendar, Layers, FileText, ChevronLeft, ChevronRight, Download, Upload, 
   Trash2, Plus, Sparkles, Check, HelpCircle, Shield, Menu, X, Landmark, RefreshCw
 } from 'lucide-react';
-import { AppState, Transaction, InstallmentPurchase, CreditCard as CardType, DebitCard as AccountType, Category } from './types';
+import { AppState, Transaction, InstallmentPurchase, CreditCard as CardType, DebitCard as AccountType, Category, Subscription } from './types';
 import { 
   INITIAL_CATEGORIES, INITIAL_CREDIT_CARDS, INITIAL_DEBIT_CARDS, 
   INITIAL_TRANSACTIONS, INITIAL_INSTALLMENTS 
@@ -18,6 +18,7 @@ import CardsAccountsSection from './components/CardsAccountsSection';
 import CardStatementSection from './components/CardStatementSection';
 import CalendarSection from './components/CalendarSection';
 import AiAdvisorSection from './components/AiAdvisorSection';
+import SubscriptionsSection from './components/SubscriptionsSection';
 
 export default function App() {
   // Navigation active tab State
@@ -32,6 +33,18 @@ export default function App() {
         const parsed = JSON.parse(cached);
         // Make sure selectedMonth is initialized if lost
         if (!parsed.selectedMonth) parsed.selectedMonth = '2026-06';
+        if (!parsed.subscriptions) parsed.subscriptions = [];
+        
+        // Ensure the default "Suscripciones/Planes" category exists to stay robust
+        if (parsed.categories && !parsed.categories.some((c: any) => c.id === 'cat-subscriptions')) {
+          parsed.categories.push({
+            id: 'cat-subscriptions',
+            name: 'Suscripciones/Planes',
+            color: '#6366F1',
+            type: 'expense',
+            icon: 'Sparkles'
+          });
+        }
         return parsed;
       } catch (e) {
         console.error('Failed to restore caching', e);
@@ -42,8 +55,18 @@ export default function App() {
       creditCards: INITIAL_CREDIT_CARDS,
       debitCards: INITIAL_DEBIT_CARDS,
       installments: INITIAL_INSTALLMENTS,
-      categories: INITIAL_CATEGORIES,
-      selectedMonth: '2026-06' // seeds cleanly in June 2026 matching local time headers
+      categories: [
+        ...INITIAL_CATEGORIES,
+        {
+          id: 'cat-subscriptions',
+          name: 'Suscripciones/Planes',
+          color: '#6366F1',
+          type: 'expense',
+          icon: 'Sparkles'
+        }
+      ],
+      selectedMonth: '2026-06',
+      subscriptions: []
     };
   });
 
@@ -52,29 +75,100 @@ export default function App() {
     localStorage.setItem('mz_planner_state', JSON.stringify(state));
   }, [state]);
 
-  // Month navigation list (months around June 2026)
-  const availableMonths = [
-    '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06',
-    '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12'
-  ];
+  // Synchronize Subscriptions -> Auto-populate transactions for current selectedMonth
+  useEffect(() => {
+    const subs = state.subscriptions || [];
+    if (subs.length === 0) return;
+
+    const currentSubscriptions = subs.filter(s => 
+      s.activeMonths.includes(state.selectedMonth)
+    );
+
+    const missingSubs = currentSubscriptions.filter(s => 
+      !state.transactions.some(t => t.subscriptionId === s.id && t.month === state.selectedMonth)
+    );
+
+    if (missingSubs.length > 0) {
+      setState(prev => {
+        const currentTxList = [...prev.transactions];
+        const newTxs: Transaction[] = [];
+
+        missingSubs.forEach(s => {
+          const alreadyExists = currentTxList.some(t => t.subscriptionId === s.id && t.month === prev.selectedMonth) || 
+                                newTxs.some(t => t.subscriptionId === s.id && t.month === prev.selectedMonth);
+          
+          if (!alreadyExists) {
+            const dayStr = String(s.dayOfMonth).padStart(2, '0');
+            const targetDate = `${prev.selectedMonth}-${dayStr}`;
+            
+            newTxs.push({
+              id: `sub-tx-${s.id}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+              description: s.name,
+              amount: s.amount,
+              type: 'expense',
+              category: s.category,
+              paymentMethod: s.paymentMethod,
+              cardId: s.cardId,
+              date: targetDate,
+              month: prev.selectedMonth,
+              isFixed: true,
+              subscriptionId: s.id
+            });
+          }
+        });
+
+        if (newTxs.length === 0) return prev;
+
+        return {
+          ...prev,
+          transactions: [...prev.transactions, ...newTxs]
+        };
+      });
+    }
+  }, [state.selectedMonth, state.subscriptions, state.transactions]);
+
+  // Dynamic available months based on selectedYear of state.selectedMonth
+  const [currentYearStr, currentMonthStr] = state.selectedMonth.split('-');
+  const currentYear = parseInt(currentYearStr, 10);
+
+  const availableMonths = Array.from({ length: 12 }, (_, i) => {
+    const monthNum = String(i + 1).padStart(2, '0');
+    return `${currentYearStr}-${monthNum}`;
+  });
 
   const monthNamesEs = [
     'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
   ];
 
-  // Quick switch month helpers
+  // Quick switch month helpers with seamless crossover into neighboring years
   const handlePrevMonth = () => {
-    const idx = availableMonths.indexOf(state.selectedMonth);
-    if (idx > 0) {
-      setState(prev => ({ ...prev, selectedMonth: availableMonths[idx - 1] }));
+    const [y, m] = state.selectedMonth.split('-');
+    let monthNum = parseInt(m, 10);
+    let yearNum = parseInt(y, 10);
+    
+    monthNum -= 1;
+    if (monthNum < 1) {
+      monthNum = 12;
+      yearNum -= 1;
     }
+    
+    const newMonth = `${yearNum}-${String(monthNum).padStart(2, '0')}`;
+    setState(prev => ({ ...prev, selectedMonth: newMonth }));
   };
 
   const handleNextMonth = () => {
-    const idx = availableMonths.indexOf(state.selectedMonth);
-    if (idx < availableMonths.length - 1) {
-      setState(prev => ({ ...prev, selectedMonth: availableMonths[idx + 1] }));
+    const [y, m] = state.selectedMonth.split('-');
+    let monthNum = parseInt(m, 10);
+    let yearNum = parseInt(y, 10);
+    
+    monthNum += 1;
+    if (monthNum > 12) {
+      monthNum = 1;
+      yearNum += 1;
     }
+    
+    const newMonth = `${yearNum}-${String(monthNum).padStart(2, '0')}`;
+    setState(prev => ({ ...prev, selectedMonth: newMonth }));
   };
 
   // 1. Transactions Actions (Adding, Deleting) with Dual Balance deducer
@@ -142,6 +236,82 @@ export default function App() {
       ...prev,
       installments: prev.installments.filter(item => item.id !== id)
     }));
+  };
+
+  // 2.5 Subscription Actions
+  const handleAddSubscription = (newSub: Omit<Subscription, 'id'>) => {
+    const id = `sub-${Date.now()}`;
+    setState(prev => ({
+      ...prev,
+      subscriptions: [...(prev.subscriptions || []), { id, ...newSub }]
+    }));
+  };
+
+  const handleDeleteSubscription = (id: string) => {
+    setState(prev => {
+      // Also remove any of its generated transactions in the transactions state to stay super clean
+      const cleanedTransactions = prev.transactions.filter(t => t.subscriptionId !== id);
+      return {
+        ...prev,
+        transactions: cleanedTransactions,
+        subscriptions: (prev.subscriptions || []).filter(s => s.id !== id)
+      };
+    });
+  };
+
+  const handleToggleSubscriptionMonth = (id: string, monthStr: string) => {
+    setState(prev => {
+      const updatedSubs = (prev.subscriptions || []).map(s => {
+        if (s.id === id) {
+          const isCurrentlyActive = s.activeMonths.includes(monthStr);
+          const activeMonths = isCurrentlyActive
+            ? s.activeMonths.filter(m => m !== monthStr)
+            : [...s.activeMonths, monthStr];
+          return { ...s, activeMonths };
+        }
+        return s;
+      });
+
+      // If deactivated, we automatically prune the generated transaction instance for this month from ledger
+      let updatedTransactions = [...prev.transactions];
+      const sub = (prev.subscriptions || []).find(s => s.id === id);
+      if (sub) {
+        const isCurrentlyActive = sub.activeMonths.includes(monthStr);
+        if (isCurrentlyActive) {
+          // turning off, let's delete the transaction instance
+          updatedTransactions = prev.transactions.filter(t => !(t.subscriptionId === id && t.month === monthStr));
+        }
+      }
+
+      return {
+        ...prev,
+        subscriptions: updatedSubs,
+        transactions: updatedTransactions
+      };
+    });
+  };
+
+  const handleUpdateTransaction = (id: string, updated: Partial<Transaction>) => {
+    setState(prev => {
+      const match = prev.transactions.find(t => t.id === id);
+      if (!match) return prev;
+
+      // Handle custom adjustments (date index change, description changes, etc.)
+      const updatedTx = { ...match, ...updated };
+
+      // Make sure if date YYYY-MM-DD changed, its "month" is updated if crossed over
+      if (updated.date) {
+        const parts = updated.date.split('-');
+        if (parts.length >= 2) {
+          updatedTx.month = `${parts[0]}-${parts[1]}`;
+        }
+      }
+
+      return {
+        ...prev,
+        transactions: prev.transactions.map(t => t.id === id ? updatedTx : t)
+      };
+    });
   };
 
   // 3. Card Configuration Actions
@@ -264,6 +434,16 @@ export default function App() {
             onAddTransaction={handleAddTransaction} 
             onDeleteTransaction={handleDeleteTransaction}
             onAddCategory={handleAddCategory}
+            onUpdateTransaction={handleUpdateTransaction}
+          />
+        );
+      case 'suscripciones':
+        return (
+          <SubscriptionsSection 
+            state={state}
+            onAddSubscription={handleAddSubscription}
+            onDeleteSubscription={handleDeleteSubscription}
+            onToggleSubscriptionMonth={handleToggleSubscriptionMonth}
           />
         );
       case 'plazos':
@@ -364,44 +544,72 @@ export default function App() {
       </header>
 
       {/* Month selections slider block - "Y en pestañas mes a mes." */}
-      <div className="bg-slate-850 text-white py-1 px-4 border-b border-slate-800 font-medium text-xs select-none shadow-inner z-20 shrink-0">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <button 
-            onClick={handlePrevMonth} 
-            className="p-1.5 rounded bg-slate-850 hover:bg-slate-800 text-slate-400 hover:text-white transition-all disabled:opacity-40"
-            disabled={state.selectedMonth === availableMonths[0]}
-            id="month-prev-btn"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-
-          {/* Large dynamic tab sheet of Months */}
-          <div className="flex-1 overflow-x-auto scrollbar-hide flex justify-start md:justify-center items-center gap-1 py-1">
-            {availableMonths.map((mVal, mIdx) => {
-              const active = state.selectedMonth === mVal;
-              const [mYear, mMonth] = mVal.split('-');
-              const isDefaultMonth = mVal === '2026-06';
-              return (
-                <button
-                  key={mVal}
-                  onClick={() => setState(prev => ({ ...prev, selectedMonth: mVal }))}
-                  className={`px-3 py-1.5 rounded-lg text-2 font-semibold transition-all whitespace-nowrap uppercase tracking-wider ${active ? 'bg-slate-100 text-slate-900 shadow-sm ring-1 ring-black/5 scale-[1.03]' : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'}`}
-                >
-                  {monthNamesEs[parseInt(mMonth, 10) - 1]} {mYear}
-                  {isDefaultMonth && <span className="text-[9px] lowercase font-normal ml-1 border border-indigo-400/30 text-indigo-300 px-1 rounded block sm:inline-block">hoy</span>}
-                </button>
-              );
-            })}
+      <div className="bg-slate-850 text-white py-1.5 px-4 border-b border-slate-800 font-medium text-xs select-none shadow-inner z-20 shrink-0">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+          
+          {/* Quick year selection dropdown */}
+          <div className="flex items-center gap-1.5 shrink-0 bg-slate-850 border border-slate-700/60 px-2.5 py-1 rounded-lg">
+            <span className="text-[10px] text-slate-400 font-sans font-bold">AÑO:</span>
+            <select
+              value={currentYear}
+              onChange={(e) => {
+                const newYear = e.target.value;
+                setState(prev => {
+                  const [y, m] = prev.selectedMonth.split('-');
+                  return { ...prev, selectedMonth: `${newYear}-${m}` };
+                });
+              }}
+              className="bg-transparent border-none text-white font-extrabold text-xs focus:ring-0 cursor-pointer outline-none p-0 pr-1"
+              id="year-select-dropdown"
+            >
+              <option value="2025" className="bg-slate-900 text-white">2025</option>
+              <option value="2026" className="bg-slate-900 text-white">2026</option>
+              <option value="2027" className="bg-slate-900 text-white">2027</option>
+              <option value="2028" className="bg-slate-900 text-white">2028</option>
+              <option value="2029" className="bg-slate-900 text-white">2029</option>
+              <option value="2030" className="bg-slate-900 text-white">2030</option>
+            </select>
           </div>
 
-          <button 
-            onClick={handleNextMonth} 
-            className="p-1.5 rounded bg-slate-855 hover:bg-slate-800 text-slate-400 hover:text-white transition-all disabled:opacity-40"
-            disabled={state.selectedMonth === availableMonths[availableMonths.length - 1]}
-            id="month-next-btn"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
+          <div className="flex-1 w-full flex items-center justify-between gap-3">
+            <button 
+              onClick={handlePrevMonth} 
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white transition-all duration-150 active:scale-95 shrink-0"
+              id="month-prev-btn"
+              title="Mes Anterior"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            {/* Large dynamic tab sheet of Months of the current year */}
+            <div className="flex-1 overflow-x-auto scrollbar-hide flex justify-start md:justify-center items-center gap-1 py-1 px-1">
+              {availableMonths.map((mVal) => {
+                const active = state.selectedMonth === mVal;
+                const [mYear, mMonth] = mVal.split('-');
+                const isDefaultMonth = mVal === '2026-06';
+                return (
+                  <button
+                    key={mVal}
+                    onClick={() => setState(prev => ({ ...prev, selectedMonth: mVal }))}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap uppercase tracking-wider ${active ? 'bg-indigo-650 text-white shadow-md font-extrabold scale-[1.03]' : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/60'}`}
+                  >
+                    {monthNamesEs[parseInt(mMonth, 10) - 1]}
+                    {isDefaultMonth && <span className="text-[8px] bg-indigo-500 text-white px-1 py-0.2 rounded-sm ml-1 text-normal lowercase tracking-normal">hoy</span>}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button 
+              onClick={handleNextMonth} 
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white transition-all duration-150 active:scale-95 shrink-0"
+              id="month-next-btn"
+              title="Mes Siguiente"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
         </div>
       </div>
 
@@ -451,6 +659,18 @@ export default function App() {
               <span className="flex items-center gap-2">
                 <Wallet className="w-4 h-4" />
                 PRESUPUESTO Mensual
+              </span>
+              <ChevronRight className="w-3.5 h-3.5 opacity-60" />
+            </button>
+
+            <button 
+              onClick={() => { setActiveTab('suscripciones'); setMobileMenuOpen(false); }}
+              className={`w-full text-left p-3 rounded-lg flex items-center justify-between transition-all ${activeTab === 'suscripciones' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+              id="nav-tab-subscriptions"
+            >
+              <span className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-indigo-400" />
+                SUSCRIPCIONES / PLANES
               </span>
               <ChevronRight className="w-3.5 h-3.5 opacity-60" />
             </button>
