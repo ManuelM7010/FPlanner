@@ -39,6 +39,15 @@ export default function SubscriptionsSection({
   });
   const [formActiveMonths, setFormActiveMonths] = useState<string[]>(defaultMonthsOfCurrentYear);
 
+  // Sync form active months whenever the viewed year of selectedMonth changes
+  React.useEffect(() => {
+    const months = Array.from({ length: 12 }, (_, i) => {
+      const mNum = String(i + 1).padStart(2, '0');
+      return `${selectedYearStr}-${mNum}`;
+    });
+    setFormActiveMonths(months);
+  }, [selectedYearStr]);
+
   // Initialize category to "Suscripciones/Planes" card if available, or first expense category
   React.useEffect(() => {
     const subCat = categories.find(c => c.id === 'cat-subscriptions' || c.name.toLowerCase().includes('suscrip'));

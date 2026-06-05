@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Calendar, ChevronLeft, ChevronRight, Info, CheckCircle, 
-  DollarSign, Landmark, CreditCard, ShoppingBag, Eye 
+  DollarSign, Landmark, CreditCard, ShoppingBag, Eye, Sparkles 
 } from 'lucide-react';
 import { AppState, Transaction, InstallmentPurchase } from '../types';
 import { getProjectedInstallments, computeCardStatementsForMonth, getCardCycle } from '../utils/financeUtils';
@@ -12,7 +12,7 @@ interface CalendarSectionProps {
 
 interface CalendarEvent {
   id: string;
-  type: 'income' | 'fixed_expense' | 'variable_expense' | 'tdc_closing' | 'tdc_due' | 'loan_due';
+  type: 'income' | 'fixed_expense' | 'variable_expense' | 'tdc_closing' | 'tdc_due' | 'loan_due' | 'subscription_due';
   title: string;
   amount: number;
   dateStr: string; // YYYY-MM-DD
@@ -43,10 +43,17 @@ export default function CalendarSection({ state }: CalendarSectionProps) {
   // 1. Regular transactions matching selectedMonth
   transactions.forEach(t => {
     if (t.month === selectedMonth) {
+      const isSub = !!t.subscriptionId || t.category === 'cat-subscriptions';
       calendarEvents.push({
         id: `reg-tx-${t.id}`,
-        type: t.type === 'income' ? 'income' : t.isFixed ? 'fixed_expense' : 'variable_expense',
-        title: t.description,
+        type: isSub 
+          ? 'subscription_due' 
+          : t.type === 'income' 
+            ? 'income' 
+            : t.isFixed 
+              ? 'fixed_expense' 
+              : 'variable_expense',
+        title: isSub && !t.description.startsWith('Suscripción:') ? `Suscripción: ${t.description}` : t.description,
         amount: t.amount,
         dateStr: t.date,
         payload: t
@@ -150,6 +157,8 @@ export default function CalendarSection({ state }: CalendarSectionProps) {
         return 'bg-rose-50 text-rose-800 border-rose-100 hover:bg-rose-100';
       case 'loan_due':
         return 'bg-blue-50 text-blue-800 border-blue-100 hover:bg-blue-100';
+      case 'subscription_due':
+        return 'bg-indigo-50 text-indigo-800 border-indigo-100 hover:bg-indigo-100';
       default:
         return 'bg-gray-100 text-gray-700 hover:bg-gray-200';
     }
@@ -163,6 +172,7 @@ export default function CalendarSection({ state }: CalendarSectionProps) {
       case 'tdc_closing': return <CreditCard className="w-3 h-3 text-slate-400" />;
       case 'tdc_due': return <CreditCard className="w-3 h-3 text-rose-600" />;
       case 'loan_due': return <Landmark className="w-3 h-3 text-blue-600" />;
+      case 'subscription_due': return <Sparkles className="w-3 h-3 text-indigo-600" />;
     }
   };
 
@@ -229,6 +239,7 @@ export default function CalendarSection({ state }: CalendarSectionProps) {
                       if (evt.type === 'income') bgDot = 'bg-emerald-500';
                       else if (evt.type === 'tdc_due') bgDot = 'bg-rose-500';
                       else if (evt.type === 'loan_due') bgDot = 'bg-blue-500';
+                      else if (evt.type === 'subscription_due') bgDot = 'bg-indigo-500';
                       else if (evt.type === 'tdc_closing') bgDot = 'bg-slate-950';
                       else if (evt.type === 'variable_expense') bgDot = 'bg-amber-500';
 

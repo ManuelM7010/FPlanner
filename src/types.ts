@@ -60,6 +60,7 @@ export interface Subscription {
   cardId?: string; // Links to card or account ID
   dayOfMonth: number; // 1-31
   activeMonths: string[]; // List of YYYY-MM month strings
+  initializedYears?: string[]; // Track which years have had their defaults generated
 }
 
 export interface AppState {

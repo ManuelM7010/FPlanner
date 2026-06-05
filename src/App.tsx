@@ -99,10 +99,34 @@ export default function App() {
   useEffect(() => {
     setState(prev => {
       const currentTxList = [...prev.transactions];
-      const subsList = prev.subscriptions || [];
+      let subsList = prev.subscriptions || [];
       const instsList = prev.installments || [];
       
       let changed = false;
+
+      // Auto-initialize months of the current viewed year of selectedMonth if a subscription has not had defaults initialized for this year
+      const targetYearStr = prev.selectedMonth.split('-')[0];
+      let updatedSubsList = [...subsList];
+      
+      subsList.forEach((s, sIdx) => {
+        const initializedYears = s.initializedYears || [];
+        if (!initializedYears.includes(targetYearStr)) {
+          const defaultMonths = Array.from({ length: 12 }, (_, i) => {
+            const mNum = String(i + 1).padStart(2, '0');
+            return `${targetYearStr}-${mNum}`;
+          });
+          updatedSubsList[sIdx] = {
+            ...s,
+            activeMonths: Array.from(new Set([...s.activeMonths, ...defaultMonths])),
+            initializedYears: [...initializedYears, targetYearStr]
+          };
+          changed = true;
+        }
+      });
+      
+      if (changed) {
+        subsList = updatedSubsList;
+      }
 
       // 1. Remove transactions of subscriptions that no longer exist or are inactive in that month
       let updatedTxs = currentTxList.filter(t => {
@@ -249,10 +273,11 @@ export default function App() {
 
       return {
         ...prev,
+        subscriptions: subsList,
         transactions: updatedTxs
       };
     });
-  }, [state.subscriptions, state.installments]);
+  }, [state.subscriptions, state.installments, state.selectedMonth]);
 
   // Dynamic available months based on selectedYear of state.selectedMonth
   const [currentYearStr, currentMonthStr] = state.selectedMonth.split('-');
@@ -368,7 +393,12 @@ export default function App() {
   // 2.5 Subscription Actions
   const handleAddSubscription = (newSub: Omit<Subscription, 'id'>) => {
     const id = `sub-${Date.now()}`;
-    const subWithId: Subscription = { id, ...newSub };
+    const targetYearStr = state.selectedMonth.split('-')[0];
+    const subWithId: Subscription = { 
+      id, 
+      ...newSub,
+      initializedYears: [targetYearStr]
+    };
     setState(prev => {
       const generatedTxs: Transaction[] = subWithId.activeMonths.map(mStr => {
         const dayStr = String(subWithId.dayOfMonth).padStart(2, '0');
@@ -416,7 +446,12 @@ export default function App() {
           const activeMonths = isCurrentlyActive
             ? s.activeMonths.filter(m => m !== monthStr)
             : [...s.activeMonths, monthStr];
-          return { ...s, activeMonths };
+          const yStr = monthStr.split('-')[0];
+          const initializedYears = s.initializedYears || [];
+          const updatedYears = initializedYears.includes(yStr)
+            ? initializedYears
+            : [...initializedYears, yStr];
+          return { ...s, activeMonths, initializedYears: updatedYears };
         }
         return s;
       });
