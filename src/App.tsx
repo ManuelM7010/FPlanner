@@ -368,10 +368,32 @@ export default function App() {
   // 2.5 Subscription Actions
   const handleAddSubscription = (newSub: Omit<Subscription, 'id'>) => {
     const id = `sub-${Date.now()}`;
-    setState(prev => ({
-      ...prev,
-      subscriptions: [...(prev.subscriptions || []), { id, ...newSub }]
-    }));
+    const subWithId: Subscription = { id, ...newSub };
+    setState(prev => {
+      const generatedTxs: Transaction[] = subWithId.activeMonths.map(mStr => {
+        const dayStr = String(subWithId.dayOfMonth).padStart(2, '0');
+        const targetDate = `${mStr}-${dayStr}`;
+        return {
+          id: `sub-tx-${subWithId.id}-${mStr}`, // Stable static ID based on subscription and month
+          description: subWithId.name,
+          amount: subWithId.amount,
+          type: 'expense',
+          category: subWithId.category || 'cat-subscriptions',
+          paymentMethod: subWithId.paymentMethod,
+          cardId: subWithId.cardId,
+          date: targetDate,
+          month: mStr,
+          isFixed: true,
+          subscriptionId: subWithId.id
+        };
+      });
+
+      return {
+        ...prev,
+        subscriptions: [...(prev.subscriptions || []), subWithId],
+        transactions: [...generatedTxs, ...prev.transactions]
+      };
+    });
   };
 
   const handleDeleteSubscription = (id: string) => {
@@ -400,6 +422,7 @@ export default function App() {
       });
 
       // If deactivated, we automatically prune the generated transaction instance for this month from ledger
+      // If activated, we append the generated transaction instance synchronously
       let updatedTransactions = [...prev.transactions];
       const sub = (prev.subscriptions || []).find(s => s.id === id);
       if (sub) {
@@ -407,6 +430,23 @@ export default function App() {
         if (isCurrentlyActive) {
           // turning off, let's delete the transaction instance
           updatedTransactions = prev.transactions.filter(t => !(t.subscriptionId === id && t.month === monthStr));
+        } else {
+          // turning ON, let's add the transaction instance synchronously
+          const dayStr = String(sub.dayOfMonth).padStart(2, '0');
+          const targetDate = `${monthStr}-${dayStr}`;
+          updatedTransactions.push({
+            id: `sub-tx-${sub.id}-${monthStr}`,
+            description: sub.name,
+            amount: sub.amount,
+            type: 'expense',
+            category: sub.category || 'cat-subscriptions',
+            paymentMethod: sub.paymentMethod,
+            cardId: sub.cardId,
+            date: targetDate,
+            month: monthStr,
+            isFixed: true,
+            subscriptionId: sub.id
+          });
         }
       }
 
