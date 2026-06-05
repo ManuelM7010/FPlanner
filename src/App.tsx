@@ -17,6 +17,7 @@ import InstallmentsSection from './components/InstallmentsSection';
 import CardsAccountsSection from './components/CardsAccountsSection';
 import CardStatementSection from './components/CardStatementSection';
 import CalendarSection from './components/CalendarSection';
+import AiAdvisorSection from './components/AiAdvisorSection';
 
 export default function App() {
   // Navigation active tab State
@@ -288,6 +289,8 @@ export default function App() {
         return <CardStatementSection state={state} />;
       case 'calendario':
         return <CalendarSection state={state} />;
+      case 'asesor-ia':
+        return <AiAdvisorSection state={state} />;
       default:
         return <Dashboard state={state} onNavigate={setActiveTab} />;
     }
@@ -426,6 +429,18 @@ export default function App() {
                 DASHBOARD GRÁFICO
               </span>
               <ChevronRight className="w-3.5 h-3.5 opacity-60" />
+            </button>
+
+            <button 
+              onClick={() => { setActiveTab('asesor-ia'); setMobileMenuOpen(false); }}
+              className={`w-full text-left p-3 rounded-lg flex items-center justify-between transition-all ${activeTab === 'asesor-ia' ? 'bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white font-bold shadow-xs' : 'text-indigo-650 bg-indigo-50/55 hover:bg-indigo-50 hover:text-indigo-950 border border-indigo-100/50'}`}
+              id="nav-tab-ai-advisor"
+            >
+              <span className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-indigo-500" />
+                ASESOR / COACH IA
+              </span>
+              <ChevronRight className="w-3.5 h-3.5 opacity-60 text-indigo-500" />
             </button>
 
             <button 
