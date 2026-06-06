@@ -214,17 +214,20 @@ export function computeCardStatementsForMonth(
     // 1. Regular Credit Card transactions that fall into this closing cycle
     transactions.forEach(t => {
       if (t.paymentMethod === 'credit' && t.cardId === card.id && !t.installmentId) {
-        const tCycle = getCardCycle(t.date, card.closingDay, card.dueDay);
-        // If it closes in the targetBillingMonth
-        if (tCycle.billingMonth === targetBillingMonth) {
-          detailedCharges.push({
-            id: t.id,
-            description: t.description,
-            amount: t.amount,
-            date: t.date,
-            isInstallment: false
-          });
-          billingBalance += t.amount;
+        // Enforce 2026 baseline constraint
+        if (t.date >= '2026-01-01') {
+          const tCycle = getCardCycle(t.date, card.closingDay, card.dueDay);
+          // If it closes in the targetBillingMonth
+          if (tCycle.billingMonth === targetBillingMonth) {
+            detailedCharges.push({
+              id: t.id,
+              description: t.description,
+              amount: t.amount,
+              date: t.date,
+              isInstallment: false
+            });
+            billingBalance += t.amount;
+          }
         }
       }
     });
@@ -234,17 +237,20 @@ export function computeCardStatementsForMonth(
       if (purchase.type === 'credit_card' && purchase.cardId === card.id) {
         const projected = getProjectedInstallments(purchase);
         projected.forEach(proj => {
-          const tCycle = getCardCycle(proj.chargeDate, card.closingDay, card.dueDay);
-          if (tCycle.billingMonth === targetBillingMonth) {
-            detailedCharges.push({
-              id: `${purchase.id}-inst-${proj.installmentIndex}`,
-              description: purchase.description,
-              amount: proj.monthlyAmount,
-              date: proj.chargeDate,
-              isInstallment: true,
-              installmentIndex: `${proj.installmentIndex}/${purchase.installments}`
-            });
-            billingBalance += proj.monthlyAmount;
+          // Enforce 2026 baseline constraint
+          if (proj.chargeDate >= '2026-01-01') {
+            const tCycle = getCardCycle(proj.chargeDate, card.closingDay, card.dueDay);
+            if (tCycle.billingMonth === targetBillingMonth) {
+              detailedCharges.push({
+                id: `${purchase.id}-inst-${proj.installmentIndex}`,
+                description: purchase.description,
+                amount: proj.monthlyAmount,
+                date: proj.chargeDate,
+                isInstallment: true,
+                installmentIndex: `${proj.installmentIndex}/${purchase.installments}`
+              });
+              billingBalance += proj.monthlyAmount;
+            }
           }
         });
       }
@@ -290,7 +296,7 @@ export function computeMonthlyAccountBalances(
   const targetYear = parseInt(targetYearStr, 10);
   const targetMonthNum = parseInt(targetMonthStr, 10);
 
-  // Initialize the balances of all cards to their baseline start balances (January 2025)
+  // Initialize the balances of all cards to their baseline start balances (January 2026)
   const currentBalances: Record<string, number> = {};
   debitCards.forEach(d => {
     currentBalances[d.id] = d.balance;
@@ -298,8 +304,9 @@ export function computeMonthlyAccountBalances(
 
   const flows: Record<string, MonthlyAccountFlow> = {};
 
-  const startYear = 2025;
-  const startMonth = 1;
+  // Dynamically set starting point to avoid infinite loops, but default starting point is 2026-01
+  const startYear = Math.min(2026, targetYear);
+  const startMonth = startYear === targetYear ? targetMonthNum : 1;
 
   let currentYear = startYear;
   let currentMonth = startMonth;
