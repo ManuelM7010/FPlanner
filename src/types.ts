@@ -71,4 +71,5 @@ export interface AppState {
   categories: Category[];
   selectedMonth: string; // YYYY-MM
   subscriptions?: Subscription[]; // Lists user subscription planes templates
+  deletedGeneratedIds?: string[]; // Track permanently deleted automatic transactions
 }

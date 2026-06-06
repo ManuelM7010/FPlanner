@@ -36,6 +36,7 @@ export default function App() {
         // Make sure selectedMonth is initialized if lost
         if (!parsed.selectedMonth) parsed.selectedMonth = '2026-06';
         if (!parsed.subscriptions) parsed.subscriptions = [];
+        if (!parsed.deletedGeneratedIds) parsed.deletedGeneratedIds = [];
         
         // Ensure the default "Suscripciones/Planes" category exists to stay robust
         if (parsed.categories) {
@@ -86,7 +87,8 @@ export default function App() {
         }
       ],
       selectedMonth: '2026-06',
-      subscriptions: []
+      subscriptions: [],
+      deletedGeneratedIds: []
     };
   });
 
@@ -148,13 +150,18 @@ export default function App() {
       // 2. Add or update missing transactions for all active months of subscriptions
       subsList.forEach(s => {
         s.activeMonths.forEach(mStr => {
+          const stableId = `sub-tx-${s.id}-${mStr}`;
+          const isDeletedPermanently = (prev.deletedGeneratedIds || []).includes(stableId);
+          if (isDeletedPermanently) {
+            return; // Skip recreation!
+          }
           const alreadyExists = updatedTxs.some(t => t.subscriptionId === s.id && t.month === mStr);
           if (!alreadyExists) {
             const dayStr = String(s.dayOfMonth).padStart(2, '0');
             const targetDate = `${mStr}-${dayStr}`;
             
             updatedTxs.push({
-              id: `sub-tx-${s.id}-${mStr}`, // Stable static ID based on subscription and month
+              id: stableId, // Stable static ID based on subscription and month
               description: s.name,
               amount: s.amount,
               type: 'expense',
@@ -222,10 +229,15 @@ export default function App() {
       instsList.forEach(inst => {
         const projected = getProjectedInstallments(inst);
         projected.forEach(proj => {
+          const stableId = `inst-tx-${inst.id}-${proj.chargeMonth}`;
+          const isDeletedPermanently = (prev.deletedGeneratedIds || []).includes(stableId);
+          if (isDeletedPermanently) {
+            return; // Skip recreation!
+          }
           const alreadyExists = updatedTxs.some(t => t.installmentId === inst.id && t.month === proj.chargeMonth);
           if (!alreadyExists) {
             updatedTxs.push({
-              id: `inst-tx-${inst.id}-${proj.chargeMonth}`,
+              id: stableId,
               description: `${inst.description} (${proj.installmentIndex}/${inst.installments})`,
               amount: inst.monthlyPayment,
               type: 'expense',
@@ -341,8 +353,38 @@ export default function App() {
       const match = prev.transactions.find(t => t.id === id);
       if (!match) return prev;
 
+      let updatedSubs = prev.subscriptions || [];
+      const newDeletedIds = [...(prev.deletedGeneratedIds || [])];
+
+      if (match.subscriptionId) {
+        // Deactivate this month from the matching subscription template
+        updatedSubs = updatedSubs.map(s => {
+          if (s.id === match.subscriptionId) {
+            return {
+              ...s,
+              activeMonths: s.activeMonths.filter(m => m !== match.month)
+            };
+          }
+          return s;
+        });
+
+        // Track stable ID to prevent resurrection
+        const stableId = `sub-tx-${match.subscriptionId}-${match.month}`;
+        if (!newDeletedIds.includes(stableId)) {
+          newDeletedIds.push(stableId);
+        }
+      } else if (match.installmentId && match.month) {
+        // Track stable ID to prevent resurrection of deleted installment charges
+        const stableId = `inst-tx-${match.installmentId}-${match.month}`;
+        if (!newDeletedIds.includes(stableId)) {
+          newDeletedIds.push(stableId);
+        }
+      }
+
       return {
         ...prev,
+        subscriptions: updatedSubs,
+        deletedGeneratedIds: newDeletedIds,
         transactions: prev.transactions.filter(t => t.id !== id)
       };
     });
@@ -414,9 +456,15 @@ export default function App() {
 
   const handleToggleSubscriptionMonth = (id: string, monthStr: string) => {
     setState(prev => {
+      const stableId = `sub-tx-${id}-${monthStr}`;
+      const isCurrentlyActive = (prev.subscriptions || []).find(s => s.id === id)?.activeMonths.includes(monthStr);
+
+      const newDeletedIds = isCurrentlyActive
+        ? [...(prev.deletedGeneratedIds || []), stableId]
+        : (prev.deletedGeneratedIds || []).filter(dId => dId !== stableId);
+
       const updatedSubs = (prev.subscriptions || []).map(s => {
         if (s.id === id) {
-          const isCurrentlyActive = s.activeMonths.includes(monthStr);
           const activeMonths = isCurrentlyActive
             ? s.activeMonths.filter(m => m !== monthStr)
             : [...s.activeMonths, monthStr];
@@ -435,7 +483,6 @@ export default function App() {
       let updatedTransactions = [...prev.transactions];
       const sub = (prev.subscriptions || []).find(s => s.id === id);
       if (sub) {
-        const isCurrentlyActive = sub.activeMonths.includes(monthStr);
         if (isCurrentlyActive) {
           // turning off, let's delete the transaction instance
           updatedTransactions = prev.transactions.filter(t => !(t.subscriptionId === id && t.month === monthStr));
@@ -444,7 +491,7 @@ export default function App() {
           const dayStr = String(sub.dayOfMonth).padStart(2, '0');
           const targetDate = `${monthStr}-${dayStr}`;
           updatedTransactions.push({
-            id: `sub-tx-${sub.id}-${monthStr}`,
+            id: stableId,
             description: sub.name,
             amount: sub.amount,
             type: 'expense',
@@ -462,6 +509,7 @@ export default function App() {
       return {
         ...prev,
         subscriptions: updatedSubs,
+        deletedGeneratedIds: newDeletedIds,
         transactions: updatedTransactions
       };
     });
