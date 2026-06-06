@@ -369,17 +369,27 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
           id="kpi-initial-cash"
           title="Saldo total en efectivo/débito al inicio de este mes"
         >
-          <div className="space-y-1.5 min-w-0">
+          <div className="space-y-1.5 min-w-0 w-full">
             <div className="flex items-center gap-1">
               <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider group-hover:text-slate-500 transition-colors truncate">Efectivo Inicial</span>
             </div>
-            <div className="text-2xl font-bold text-slate-600">${totalInitialCashBalance.toLocaleString()}</div>
-            <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1 truncate">
-              <Wallet className="w-3 h-3 text-slate-400" />
-              Cuentas líquidas al inicio de mes
-            </p>
+            <div className="text-2xl font-bold text-slate-600">${totalInitialCashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            
+            {/* Breakdown of what's being summed */}
+            <div className="border-t border-slate-100 pt-1.5 mt-1 space-y-1 text-[10px] text-slate-400">
+              {debitCards.map(d => {
+                const flow = accountFlows[d.id];
+                const bal = flow ? flow.initialBalance : d.balance;
+                return (
+                  <div key={d.id} className="flex justify-between gap-2">
+                    <span className="truncate text-slate-500">{d.name}:</span>
+                    <span className="font-semibold text-slate-600">${bal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div className="p-2.5 bg-slate-50 text-slate-500 rounded-lg group-hover:bg-slate-600 group-hover:text-white transition-colors duration-200 shrink-0">
+          <div className="p-2.5 bg-slate-50 text-slate-500 rounded-lg group-hover:bg-slate-600 group-hover:text-white transition-colors duration-200 shrink-0 ml-3">
             <Wallet className="w-5 h-5" />
           </div>
         </div>
@@ -484,17 +494,29 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
           id="kpi-final-cash"
           title="Saldo total en efectivo/débito proyectado al final de este mes"
         >
-          <div className="space-y-1.5 min-w-0">
+          <div className="space-y-1.5 min-w-0 w-full">
             <div className="flex items-center gap-1">
-              <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider group-hover:text-slate-500 transition-colors truncate">Efectivo Final</span>
+              <span className="text-xs font-semibold uppercase text-emerald-600 tracking-wider group-hover:text-emerald-700 transition-colors truncate">Efectivo Final</span>
             </div>
-            <div className="text-2xl font-extrabold text-emerald-600">${totalFinalCashBalance.toLocaleString()}</div>
-            <p className="text-[11px] text-emerald-600 font-bold flex items-center gap-1 truncate">
-              <Coins className="w-3 h-3 text-emerald-500" />
-              Caja proyectada a fin de mes
-            </p>
+            <div className="text-2xl font-extrabold text-emerald-600">${totalFinalCashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            
+            {/* Math audit formula */}
+            <div className="border-t border-emerald-100 pt-1.5 mt-1 space-y-1 text-[10px] text-slate-400">
+              <div className="flex justify-between gap-2">
+                <span>Efectivo Inicial:</span>
+                <span className="font-semibold text-slate-600">${totalInitialCashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span>(+) Ingresos Planif.:</span>
+                <span className="font-semibold text-emerald-600">+${monthlyIncomes.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span>(-) Egresos Reales:</span>
+                <span className="font-semibold text-rose-650">-${totalOutflows.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+            </div>
           </div>
-          <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-200 shrink-0">
+          <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-200 shrink-0 ml-3">
             <Coins className="w-5 h-5" />
           </div>
         </div>

@@ -352,7 +352,31 @@ export function computeMonthlyAccountBalances(
       }
     });
 
-    // Automatically calculated loans/cc payments are skipped to keep account tracking 100% manually auditable and intuitive.
+    // Apply automated loans and credit card payments to the checking account to reflect real cash outflows
+    const checkingAcc = debitCards.find(d => d.id === 'deb-bac-checking') || debitCards.find(d => d.id !== 'deb-cash-pocket') || debitCards[0];
+    if (checkingAcc) {
+      // 1. Loans paid in this active period
+      const activeLoansList = installments.filter(inst => inst.type === 'loan');
+      const loanPayments = activeLoansList
+        .flatMap(inst => getProjectedInstallments(inst))
+        .filter(proj => proj.chargeMonth === activeMonthStr)
+        .reduce((sum, p) => sum + p.monthlyAmount, 0);
+
+      // 2. Credit Card payments due in this active period (statement closed in the previous month)
+      const [mY, mMonth] = activeMonthStr.split('-');
+      let prevYr = parseInt(mY, 10);
+      let prevM = parseInt(mMonth, 10) - 1;
+      if (prevM === 0) {
+        prevM = 12;
+        prevYr -= 1;
+      }
+      const prevMStr = `${prevYr}-${String(prevM).padStart(2, '0')}`;
+      const prevStatements = computeCardStatementsForMonth(creditCards, transactions, installments, prevMStr);
+      const ccCardPaymentsDue = prevStatements.reduce((sum, s) => sum + s.billingBalance, 0);
+
+      // Add to expenses of the primary checking account
+      monthExpenses[checkingAcc.id] = (monthExpenses[checkingAcc.id] || 0) + loanPayments + ccCardPaymentsDue;
+    }
 
     debitCards.forEach(d => {
       const initBal = currentBalances[d.id] || 0;
