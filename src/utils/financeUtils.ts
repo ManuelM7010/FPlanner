@@ -213,7 +213,7 @@ export function computeCardStatementsForMonth(
 
     // 1. Regular Credit Card transactions that fall into this closing cycle
     transactions.forEach(t => {
-      if (t.paymentMethod === 'credit' && t.cardId === card.id) {
+      if (t.paymentMethod === 'credit' && t.cardId === card.id && !t.installmentId) {
         const tCycle = getCardCycle(t.date, card.closingDay, card.dueDay);
         // If it closes in the targetBillingMonth
         if (tCycle.billingMonth === targetBillingMonth) {

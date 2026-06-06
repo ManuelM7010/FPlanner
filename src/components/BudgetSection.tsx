@@ -4,6 +4,7 @@ import {
   Tag, Info, Check, Sparkles, FolderPlus, ArrowUpRight, ArrowDownRight 
 } from 'lucide-react';
 import { AppState, Transaction, PaymentMethod, Category } from '../types';
+import { computeMonthlyAccountBalances } from '../utils/financeUtils';
 
 interface BudgetSectionProps {
   state: AppState;
@@ -21,6 +22,9 @@ export default function BudgetSection({
   onUpdateTransaction
 }: BudgetSectionProps) {
   const { transactions, creditCards, debitCards, categories, selectedMonth } = state;
+
+  // Computar saldos acumulados de cuentas de forma dinámica para el período seleccionado
+  const accountFlows = computeMonthlyAccountBalances(debitCards, transactions, selectedMonth);
 
   // Inline editing states
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -287,11 +291,16 @@ export default function BudgetSection({
                   className="w-full px-2.5 py-1.5 border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-slate-400 text-slate-800 font-normal"
                   required
                 >
-                  {getSubAccountOptions().map(opt => (
-                    <option key={opt.id} value={opt.id}>
-                      {opt.name} {paymentMethod === 'credit' ? `(Límite: $${(opt as any).limit})` : `(Saldo: $${(opt as any).balance})`}
-                    </option>
-                  ))}
+                  {getSubAccountOptions().map(opt => {
+                    const balanceText = paymentMethod === 'credit' 
+                      ? `Límite: $${(opt as any).limit}` 
+                      : `Saldo: $${(accountFlows[opt.id]?.finalBalance ?? (opt as any).balance).toLocaleString()}`;
+                    return (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.name} ({balanceText})
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
             )}

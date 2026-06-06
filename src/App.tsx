@@ -323,28 +323,15 @@ export default function App() {
     setState(prev => ({ ...prev, selectedMonth: newMonth }));
   };
 
-  // 1. Transactions Actions (Adding, Deleting) with Dual Balance deducer
+  // 1. Transactions Actions (Adding, Deleting) with dynamic rolling balance
   const handleAddTransaction = (newTx: Omit<Transaction, 'id'>) => {
     const id = `tx-${Date.now()}`;
     const txToAdd: Transaction = { id, ...newTx };
 
     setState(prev => {
-      // Automatic balance impact calculation for Debit Card or Bank Transfers
-      let updatedDebitCards = [...prev.debitCards];
-      if (txToAdd.paymentMethod === 'debit' || txToAdd.paymentMethod === 'transfer') {
-        updatedDebitCards = prev.debitCards.map(deb => {
-          if (deb.id === txToAdd.cardId) {
-            const delta = txToAdd.type === 'expense' ? -txToAdd.amount : txToAdd.amount;
-            return { ...deb, balance: +(deb.balance + delta).toFixed(2) };
-          }
-          return deb;
-        });
-      }
-
       return {
         ...prev,
-        transactions: [txToAdd, ...prev.transactions],
-        debitCards: updatedDebitCards
+        transactions: [txToAdd, ...prev.transactions]
       };
     });
   };
@@ -354,22 +341,9 @@ export default function App() {
       const match = prev.transactions.find(t => t.id === id);
       if (!match) return prev;
 
-      // Reverse balance deduction if deleting direct account expense
-      let updatedDebitCards = [...prev.debitCards];
-      if (match.paymentMethod === 'debit' || match.paymentMethod === 'transfer') {
-        updatedDebitCards = prev.debitCards.map(deb => {
-          if (deb.id === match.cardId) {
-            const reverseDelta = match.type === 'expense' ? match.amount : -match.amount;
-            return { ...deb, balance: +(deb.balance + reverseDelta).toFixed(2) };
-          }
-          return deb;
-        });
-      }
-
       return {
         ...prev,
-        transactions: prev.transactions.filter(t => t.id !== id),
-        debitCards: updatedDebitCards
+        transactions: prev.transactions.filter(t => t.id !== id)
       };
     });
   };
