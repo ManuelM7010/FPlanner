@@ -452,10 +452,10 @@ export default function Dashboard({ state, onNavigate, onUpdateDebitCardInitialB
                             e.stopPropagation();
                             startEditing(d.id, bal);
                           }}
-                          className="p-0.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded opacity-0 group-hover/row:opacity-100 transition-opacity"
+                          className="p-0.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded opacity-60 hover:opacity-100 transition-opacity ml-0.5"
                           title="Editar Saldo Inicial"
                         >
-                          <Pencil className="w-2.5 h-2.5" shrink-0="true" />
+                          <Pencil className="w-2.5 h-2.5 shrink-0" />
                         </button>
                       </div>
                     )}
