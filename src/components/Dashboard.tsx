@@ -179,49 +179,16 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
     categorySplitMap[loanCatId].value += loanPayments;
   }
 
-  // Adding Credit card payments split
-  activePeriodMonths.forEach(mStr => {
-    const [mY, mMonth] = mStr.split('-');
-    let prevYr = parseInt(mY, 10);
-    let prevM = parseInt(mMonth, 10) - 1;
-    if (prevM === 0) {
-      prevM = 12;
-      prevYr -= 1;
+  // Adding Credit card payments
+  if (totalCardPaymentsDue > 0) {
+    const tdcCatId = 'cat-credit-card-payment';
+    const catName = 'Pago Tarjetas de Crédito (TDC)';
+    const catColor = '#6366F1';
+    if (!categorySplitMap[tdcCatId]) {
+      categorySplitMap[tdcCatId] = { name: catName, value: 0, color: catColor };
     }
-    const prevMStr = `${prevYr}-${String(prevM).padStart(2, '0')}`;
-
-    creditCards.forEach(card => {
-      const prevStatement = computeCardStatementsForMonth(creditCards, transactions, installments, prevMStr)
-        .find(s => s.cardId === card.id);
-      if (prevStatement && prevStatement.billingBalance > 0) {
-        prevStatement.detailedCharges.forEach(charge => {
-          let chargeCatId = 'cat-other';
-          let chargeCatName = 'Cargos Tarjeta de Crédito';
-          let chargeCatColor = '#6B7280';
-          
-          const origTx = transactions.find(t => t.id === charge.id);
-          if (origTx) {
-            chargeCatId = origTx.category;
-            const catObj = categories.find(c => c.id === chargeCatId);
-            chargeCatName = catObj ? catObj.name : 'Otros';
-            chargeCatColor = catObj ? catObj.color : '#6B7280';
-          } else if (charge.isInstallment) {
-            const basePurchase = installments.find(inst => inst.id === charge.id.split('-inst-')[0]);
-            if (basePurchase) {
-              chargeCatId = 'cat-leisure';
-              chargeCatName = 'Plazos (' + basePurchase.description + ')';
-              chargeCatColor = '#F59E0B';
-            }
-          }
-
-          if (!categorySplitMap[chargeCatId]) {
-            categorySplitMap[chargeCatId] = { name: chargeCatName, value: 0, color: chargeCatColor };
-          }
-          categorySplitMap[chargeCatId].value += charge.amount;
-        });
-      }
-    });
-  });
+    categorySplitMap[tdcCatId].value += totalCardPaymentsDue;
+  }
 
   const pieData = Object.values(categorySplitMap).filter(item => item.value > 0);
 
