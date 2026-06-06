@@ -24,7 +24,7 @@ export default function BudgetSection({
   const { transactions, creditCards, debitCards, categories, selectedMonth, installments } = state;
 
   // Computar saldos acumulados de cuentas de forma dinámica para el período seleccionado
-  const accountFlows = computeMonthlyAccountBalances(debitCards, transactions, creditCards, installments, selectedMonth);
+  const accountFlows = computeMonthlyAccountBalances(debitCards, transactions, creditCards, installments, selectedMonth, state.initialBalancesOverrides);
 
   // Inline editing states
   const [editingId, setEditingId] = useState<string | null>(null);

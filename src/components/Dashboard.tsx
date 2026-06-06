@@ -6,7 +6,7 @@ import {
 import { 
   DollarSign, TrendingUp, TrendingDown, PiggyBank, CreditCard, Wallet, 
   AlertCircle, ChevronRight, Briefcase, Sparkles, Home, Calendar, Info, X, Eye,
-  Coins
+  Coins, Pencil, Check
 } from 'lucide-react';
 import { AppState, Transaction, InstallmentPurchase } from '../types';
 import { getProjectedInstallments, computeCardStatementsForMonth, computeMonthlyAccountBalances } from '../utils/financeUtils';
@@ -14,15 +14,32 @@ import { getProjectedInstallments, computeCardStatementsForMonth, computeMonthly
 interface DashboardProps {
   state: AppState;
   onNavigate: (section: string) => void;
+  onUpdateDebitCardInitialBalance?: (id: string, month: string, newInitialBalance: number) => void;
 }
 
-export default function Dashboard({ state, onNavigate }: DashboardProps) {
+export default function Dashboard({ state, onNavigate, onUpdateDebitCardInitialBalance }: DashboardProps) {
   const { transactions, creditCards, debitCards, installments, categories, selectedMonth } = state;
 
   const [viewType, setViewType] = React.useState<'monthly' | 'cumulative'>('monthly');
   const [selectedKpi, setSelectedKpi] = React.useState<'incomes' | 'projected_expenses' | 'outflows' | 'savings' | null>(null);
   const [selectedCardDetail, setSelectedCardDetail] = React.useState<{ cardId: string; billingMonth: string; cardName: string } | null>(null);
   const [selectedAuditAccount, setSelectedAuditAccount] = React.useState<any | null>(null);
+
+  const [editingInitialCardId, setEditingInitialCardId] = React.useState<string | null>(null);
+  const [editingInitialValue, setEditingInitialValue] = React.useState<string>('');
+
+  const startEditing = (cardId: string, currentVal: number) => {
+    setEditingInitialCardId(cardId);
+    setEditingInitialValue(String(currentVal));
+  };
+
+  const saveEditing = (cardId: string) => {
+    const val = parseFloat(editingInitialValue);
+    if (!isNaN(val) && onUpdateDebitCardInitialBalance) {
+      onUpdateDebitCardInitialBalance(cardId, selectedMonth, val);
+    }
+    setEditingInitialCardId(null);
+  };
 
   const [year, month] = selectedMonth.split('-');
   const monthNamesEs = [
@@ -180,13 +197,13 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
   const otherExpenses = otherTxs.reduce((sum, t) => sum + t.amount, 0);
 
   // Account flows for the selectedMonth balance rollover logic
-  const accountFlows = computeMonthlyAccountBalances(debitCards, transactions, creditCards, installments, selectedMonth);
+  const accountFlows = computeMonthlyAccountBalances(debitCards, transactions, creditCards, installments, selectedMonth, state.initialBalancesOverrides);
 
   const firstMonthOfPeriod = activePeriodMonths[0];
   const lastMonthOfPeriod = activePeriodMonths[activePeriodMonths.length - 1];
 
-  const initialAccountFlows = computeMonthlyAccountBalances(debitCards, transactions, creditCards, installments, firstMonthOfPeriod);
-  const finalAccountFlows = computeMonthlyAccountBalances(debitCards, transactions, creditCards, installments, lastMonthOfPeriod);
+  const initialAccountFlows = computeMonthlyAccountBalances(debitCards, transactions, creditCards, installments, firstMonthOfPeriod, state.initialBalancesOverrides);
+  const finalAccountFlows = computeMonthlyAccountBalances(debitCards, transactions, creditCards, installments, lastMonthOfPeriod, state.initialBalancesOverrides);
 
   const totalInitialCashBalance = debitCards.reduce((sum, d) => {
     const flow = initialAccountFlows[d.id];
@@ -382,14 +399,66 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
             <div className="text-2xl font-bold text-slate-600">${totalInitialCashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
             
             {/* Breakdown of what's being summed */}
-            <div className="border-t border-slate-100 pt-1.5 mt-1 space-y-1 text-[10px] text-slate-400">
+            <div className="border-t border-slate-100 pt-1.5 mt-1 space-y-1.5 text-[10px] text-slate-400">
               {debitCards.map(d => {
                 const flow = accountFlows[d.id];
                 const bal = flow ? flow.initialBalance : d.balance;
+                const isEditing = editingInitialCardId === d.id;
                 return (
-                  <div key={d.id} className="flex justify-between gap-2">
-                    <span className="truncate text-slate-500">{d.name}:</span>
-                    <span className="font-semibold text-slate-600">${bal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <div key={d.id} className="flex justify-between items-center gap-1 min-h-[18px]">
+                    <span className="truncate text-slate-500 font-medium" title={d.name}>{d.name}:</span>
+                    {isEditing ? (
+                      <div className="flex items-center gap-1">
+                        <span className="text-slate-400 font-mono text-[9px]">$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editingInitialValue}
+                          onChange={(e) => setEditingInitialValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') saveEditing(d.id);
+                            if (e.key === 'Escape') setEditingInitialCardId(null);
+                          }}
+                          className="w-16 px-1 py-0 px-0.5 text-[9px] font-mono border border-indigo-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white text-slate-700 h-4"
+                          autoFocus
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            saveEditing(d.id);
+                          }}
+                          className="p-0.5 text-emerald-600 hover:bg-emerald-50 rounded"
+                          title="Guardar"
+                        >
+                          <Check className="w-2.5 h-2.5" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingInitialCardId(null);
+                          }}
+                          className="p-0.5 text-rose-500 hover:bg-rose-50 rounded"
+                          title="Cancelar"
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1 group/row">
+                        <span className="font-semibold text-slate-600">${bal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startEditing(d.id, bal);
+                          }}
+                          className="p-0.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded opacity-0 group-hover/row:opacity-100 transition-opacity"
+                          title="Editar Saldo Inicial"
+                        >
+                          <Pencil className="w-2.5 h-2.5" shrink-0="true" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}

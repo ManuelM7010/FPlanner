@@ -572,7 +572,7 @@ export default function App() {
 
   const handleUpdateDebitCardBalance = (id: string, newBalance: number) => {
     setState(prev => {
-      const flows = computeMonthlyAccountBalances(prev.debitCards, prev.transactions, prev.creditCards, prev.installments, prev.selectedMonth);
+      const flows = computeMonthlyAccountBalances(prev.debitCards, prev.transactions, prev.creditCards, prev.installments, prev.selectedMonth, prev.initialBalancesOverrides);
       const flow = flows[id];
       let diff = 0;
       if (flow) {
@@ -615,6 +615,23 @@ export default function App() {
         ...prev,
         debitCards: updatedDebitCards,
         transactions: [...prev.transactions, adjustmentTx]
+      };
+    });
+  };
+
+  const handleUpdateDebitCardInitialBalance = (id: string, month: string, newInitialBalance: number) => {
+    setState(prev => {
+      const overrides = { ...(prev.initialBalancesOverrides || {}) };
+      if (!overrides[id]) {
+        overrides[id] = {};
+      }
+      overrides[id] = {
+        ...overrides[id],
+        [month]: Number(newInitialBalance)
+      };
+      return {
+        ...prev,
+        initialBalancesOverrides: overrides
       };
     });
   };
@@ -729,6 +746,7 @@ export default function App() {
             onAddDebitCard={handleAddDebitCard}
             onDeleteDebitCard={handleDeleteDebitCard}
             onUpdateDebitCardBalance={handleUpdateDebitCardBalance}
+            onUpdateDebitCardInitialBalance={handleUpdateDebitCardInitialBalance}
           />
         );
       case 'estado-cuenta':
@@ -738,7 +756,13 @@ export default function App() {
       case 'asesor-ia':
         return <AiAdvisorSection state={state} />;
       default:
-        return <Dashboard state={state} onNavigate={setActiveTab} />;
+        return (
+          <Dashboard 
+            state={state} 
+            onNavigate={setActiveTab} 
+            onUpdateDebitCardInitialBalance={handleUpdateDebitCardInitialBalance}
+          />
+        );
     }
   };
 

@@ -72,4 +72,5 @@ export interface AppState {
   selectedMonth: string; // YYYY-MM
   subscriptions?: Subscription[]; // Lists user subscription planes templates
   deletedGeneratedIds?: string[]; // Track permanently deleted automatic transactions
+  initialBalancesOverrides?: Record<string, Record<string, number>>; // cardId -> YYYY-MM -> initialBalance
 }

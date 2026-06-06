@@ -13,6 +13,7 @@ interface CardsAccountsSectionProps {
   onAddDebitCard: (acc: Omit<AccountType, 'id'>) => void;
   onDeleteDebitCard: (id: string) => void;
   onUpdateDebitCardBalance: (id: string, newBalance: number) => void;
+  onUpdateDebitCardInitialBalance?: (id: string, month: string, newInitialBalance: number) => void;
 }
 
 export default function CardsAccountsSection({
@@ -21,12 +22,20 @@ export default function CardsAccountsSection({
   onDeleteCreditCard,
   onAddDebitCard,
   onDeleteDebitCard,
-  onUpdateDebitCardBalance
+  onUpdateDebitCardBalance,
+  onUpdateDebitCardInitialBalance
 }: CardsAccountsSectionProps) {
   const { creditCards, debitCards } = state;
 
   // Calculamos los saldos mensuales dinámicos de acuerdo con los movimientos
-  const accountFlows = computeMonthlyAccountBalances(debitCards, state.transactions, state.creditCards, state.installments, state.selectedMonth);
+  const accountFlows = computeMonthlyAccountBalances(
+    debitCards, 
+    state.transactions, 
+    state.creditCards, 
+    state.installments, 
+    state.selectedMonth,
+    state.initialBalancesOverrides
+  );
 
   // Modal breakdown state
   const [selectedAccountDetail, setSelectedAccountDetail] = useState<AccountType | null>(null);

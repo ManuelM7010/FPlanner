@@ -290,7 +290,8 @@ export function computeMonthlyAccountBalances(
   transactions: Transaction[],
   creditCards: CreditCard[],
   installments: InstallmentPurchase[],
-  targetMonth: string // YYYY-MM
+  targetMonth: string, // YYYY-MM
+  initialBalancesOverrides?: Record<string, Record<string, number>>
 ): Record<string, MonthlyAccountFlow> {
   const [targetYearStr, targetMonthStr] = targetMonth.split('-');
   const targetYear = parseInt(targetYearStr, 10);
@@ -313,6 +314,13 @@ export function computeMonthlyAccountBalances(
 
   while (true) {
     const activeMonthStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+
+    // Apply overriding starting balances for this month if specified
+    debitCards.forEach(d => {
+      if (initialBalancesOverrides?.[d.id]?.[activeMonthStr] !== undefined) {
+        currentBalances[d.id] = initialBalancesOverrides[d.id][activeMonthStr];
+      }
+    });
 
     const monthIncomes: Record<string, number> = {};
     const monthExpenses: Record<string, number> = {};
