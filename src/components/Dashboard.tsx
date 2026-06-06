@@ -269,7 +269,7 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
       {/* Title block */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-slate-100 gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-800 tracking-tight">financial planner MZ</h1>
+          <h1 className="text-2xl font-semibold text-slate-800 tracking-tight">Financial Planner MZ</h1>
           <p className="text-sm text-slate-500">
             Panel Ejecutivo de Control - Período: <strong className="text-slate-700">{monthLabel}</strong>
             {viewType === 'cumulative' && <span className="ml-2 px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold">VISTA ACUMULADA ANUAL</span>}
