@@ -19,6 +19,8 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
   const { transactions, creditCards, debitCards, installments, categories, selectedMonth } = state;
 
   const [viewType, setViewType] = React.useState<'monthly' | 'cumulative'>('monthly');
+  const [selectedKpi, setSelectedKpi] = React.useState<'incomes' | 'projected_expenses' | 'outflows' | 'savings' | null>(null);
+  const [selectedCardDetail, setSelectedCardDetail] = React.useState<{ cardId: string; billingMonth: string; cardName: string } | null>(null);
 
   const [year, month] = selectedMonth.split('-');
   const monthNamesEs = [
@@ -97,6 +99,7 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
     totalCardPaymentsDue += dueAmount;
 
     return {
+      cardId: card.id,
       cardName: card.name,
       dueAmount: Number(dueAmount.toFixed(2)),
       closingDate: '',
@@ -323,54 +326,86 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KPI: Incomes */}
-        <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-xs flex items-start justify-between" id="kpi-incomes">
+        <div 
+          onClick={() => setSelectedKpi('incomes')}
+          className="bg-white p-5 rounded-xl border border-slate-100 shadow-xs flex items-start justify-between cursor-pointer hover:shadow-md hover:scale-[1.01] hover:border-emerald-200 transition-all duration-200 group" 
+          id="kpi-incomes"
+          title="Ver desglose de Ingresos Planificados"
+        >
           <div className="space-y-1.5">
-            <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider">Ingresos Planificados</span>
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider group-hover:text-slate-500 transition-colors">Ingresos Planificados</span>
+              <span className="text-[9px] text-emerald-500 font-bold bg-emerald-50 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">Ver</span>
+            </div>
             <div className="text-2xl font-bold text-emerald-600">${monthlyIncomes.toLocaleString()}</div>
             <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
               <TrendingUp className="w-3 h-3 text-emerald-500" />
               Sueldos y otros ingresos fijos
             </p>
           </div>
-          <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-lg">
+          <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-200">
             <DollarSign className="w-5 h-5" />
           </div>
         </div>
 
         {/* KPI: Gasto Mensual Proyectado */}
-        <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-xs flex items-start justify-between" id="kpi-projected-expenses">
+        <div 
+          onClick={() => setSelectedKpi('projected_expenses')}
+          className="bg-white p-5 rounded-xl border border-slate-100 shadow-xs flex items-start justify-between cursor-pointer hover:shadow-md hover:scale-[1.01] hover:border-indigo-200 transition-all duration-200 group" 
+          id="kpi-projected-expenses"
+          title="Ver desglose del Gasto Proyectado"
+        >
           <div className="space-y-1.5">
-            <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider">Gasto Proyectado (Total)</span>
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider group-hover:text-slate-500 transition-colors">Gasto Proyectado (Total)</span>
+              <span className="text-[9px] text-indigo-500 font-bold bg-indigo-50 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">Ver</span>
+            </div>
             <div className="text-2xl font-bold text-indigo-600">${totalProjectedExpenses.toLocaleString()}</div>
             <p className="text-[11px] font-medium text-slate-500 flex items-center gap-1" title="Suma compromisos incurridos o fijos de este mes">
               <Sparkles className="w-3 h-3 text-indigo-500" />
               Compromisos, fijos y variables
             </p>
           </div>
-          <div className="p-2.5 bg-indigo-50 text-indigo-650 rounded-lg">
+          <div className="p-2.5 bg-indigo-50 text-indigo-650 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-200">
             <Sparkles className="w-5 h-5" />
           </div>
         </div>
 
         {/* KPI: Cash Outflows (Real Expenses Paid) */}
-        <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-xs flex items-start justify-between" id="kpi-expenses">
+        <div 
+          onClick={() => setSelectedKpi('outflows')}
+          className="bg-white p-5 rounded-xl border border-slate-100 shadow-xs flex items-start justify-between cursor-pointer hover:shadow-md hover:scale-[1.01] hover:border-rose-200 transition-all duration-200 group" 
+          id="kpi-expenses"
+          title="Ver desglose de Egresos Reales"
+        >
           <div className="space-y-1.5">
-            <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider">Egresos Reales (Flujo)</span>
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider group-hover:text-slate-500 transition-colors">Egresos Reales (Flujo)</span>
+              <span className="text-[9px] text-rose-500 font-bold bg-rose-50 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">Ver</span>
+            </div>
             <div className="text-2xl font-bold text-rose-600">${totalOutflows.toLocaleString()}</div>
             <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
               <TrendingDown className="w-3 h-3 text-rose-400" />
               Directos + Cuota Préstamo + TDC
             </p>
           </div>
-          <div className="p-2.5 bg-rose-50 text-rose-600 rounded-lg">
+          <div className="p-2.5 bg-rose-50 text-rose-600 rounded-lg group-hover:bg-rose-600 group-hover:text-white transition-colors duration-200">
             <TrendingDown className="w-5 h-5" />
           </div>
         </div>
 
         {/* KPI: Savings */}
-        <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-xs flex items-start justify-between" id="kpi-savings">
+        <div 
+          onClick={() => setSelectedKpi('savings')}
+          className="bg-white p-5 rounded-xl border border-slate-100 shadow-xs flex items-start justify-between cursor-pointer hover:shadow-md hover:scale-[1.01] hover:border-blue-200 transition-all duration-200 group" 
+          id="kpi-savings"
+          title="Ver desglose de Ahorro Neto Proyectado"
+        >
           <div className="space-y-1.5">
-            <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider">Ahorro Proyectado</span>
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider group-hover:text-slate-500 transition-colors">Ahorro Proyectado</span>
+              <span className="text-[9px] text-blue-500 font-bold bg-blue-50 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">Ver</span>
+            </div>
             <div className={`text-2xl font-bold ${projectedSavings >= 0 ? 'text-blue-600' : 'text-amber-600'}`}>
               ${projectedSavings.toLocaleString()}
             </div>
@@ -379,7 +414,7 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
               Tasa de ahorro: <span className="font-bold text-blue-600">{projectedSavingsRate.toFixed(1)}%</span>
             </div>
           </div>
-          <div className={`p-2.5 rounded-lg ${projectedSavings >= 0 ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
+          <div className={`p-2.5 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors duration-200 ${projectedSavings >= 0 ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
             <PiggyBank className="w-5 h-5" />
           </div>
         </div>
@@ -643,22 +678,47 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
             </p>
             
             <div className="space-y-3">
-              {cardsDueBalances.map((card, i) => (
-                <div key={i} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100/50 transition-colors">
-                  <div>
-                    <h3 className="text-xs font-semibold text-slate-700">{card.cardName}</h3>
-                    <div className="text-[10px] text-slate-400">
-                      Vencía el: <strong className="text-slate-500">{card.dueDate || 'N/D'}</strong>
+              {cardsDueBalances.map((card, i) => {
+                const billingMonthVal = (() => {
+                  const [mY, mMonth] = selectedMonth.split('-');
+                  let prevYr = parseInt(mY, 10);
+                  let prevM = parseInt(mMonth, 10) - 1;
+                  if (prevM === 0) {
+                    prevM = 12;
+                    prevYr -= 1;
+                  }
+                  return `${prevYr}-${String(prevM).padStart(2, '0')}`;
+                })();
+
+                return (
+                  <div 
+                    key={i} 
+                    onClick={() => setSelectedCardDetail({
+                      cardId: card.cardId,
+                      billingMonth: billingMonthVal,
+                      cardName: card.cardName
+                    })}
+                    className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100/80 hover:shadow-xs hover:scale-[1.01] border border-transparent hover:border-blue-100 transition-all duration-200 cursor-pointer group"
+                    title={`Hacer clic para ver el desglose detallado de cargos de la tarjeta ${card.cardName}`}
+                  >
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <h3 className="text-xs font-semibold text-slate-705 group-hover:text-blue-600 transition-colors">{card.cardName}</h3>
+                        <span className="text-[8px] font-bold text-blue-500 bg-blue-50 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">Ver</span>
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        Vencía el: <strong className="text-slate-500">{card.dueDate || 'N/D'}</strong>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-bold text-slate-700 font-mono">${card.dueAmount.toLocaleString()}</div>
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md ${card.dueAmount > 0 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                        {card.dueAmount > 0 ? 'Por Pagar' : 'Sin cargos'}
+                      </span>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-sm font-bold text-slate-700">${card.dueAmount.toLocaleString()}</div>
-                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md ${card.dueAmount > 0 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                      {card.dueAmount > 0 ? 'Por Pagar' : 'Sin cargos'}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
           
@@ -742,6 +802,603 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
           </div>
         </div>
       </div>
+
+      {/* DETALLES DE KPI DIALOG MODAL */}
+      {selectedKpi && (
+        <div id="kpi-details-overlay" className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div id="kpi-details-modal" className="bg-white rounded-xl shadow-xl border border-slate-150 max-w-2xl w-full p-6 text-xs flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4 shrink-0">
+              <h3 className="text-base font-bold text-slate-800 tracking-tight flex items-center gap-2">
+                {selectedKpi === 'incomes' && (
+                  <>
+                    <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded">
+                      <DollarSign className="w-4 h-4" />
+                    </div>
+                    <span>Detalle de Ingresos Planificados ({monthLabel})</span>
+                  </>
+                )}
+                {selectedKpi === 'projected_expenses' && (
+                  <>
+                    <div className="p-1.5 bg-indigo-50 text-indigo-650 rounded">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <span>Detalle de Gasto Proyectado ({monthLabel})</span>
+                  </>
+                )}
+                {selectedKpi === 'outflows' && (
+                  <>
+                    <div className="p-1.5 bg-rose-50 text-rose-600 rounded">
+                      <TrendingDown className="w-4 h-4" />
+                    </div>
+                    <span>Detalle de Egresos Reales de Efectivo / Cuentas ({monthLabel})</span>
+                  </>
+                )}
+                {selectedKpi === 'savings' && (
+                  <>
+                    <div className="p-1.5 bg-blue-50 text-blue-600 rounded">
+                      <PiggyBank className="w-4 h-4" />
+                    </div>
+                    <span>Análisis de Ahorro Neto Proyectado ({monthLabel})</span>
+                  </>
+                )}
+              </h3>
+              <button 
+                onClick={() => setSelectedKpi(null)}
+                className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-all text-sm font-semibold"
+                aria-label="Cerrar modal"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Content - Scrollable */}
+            <div className="overflow-y-auto flex-1 pr-1 py-1 space-y-4">
+              {selectedKpi === 'incomes' && (() => {
+                const list = transactions.filter(t => activePeriodMonths.includes(t.month) && t.type === 'income');
+                if (list.length === 0) {
+                  return (
+                    <div className="py-8 text-center text-slate-400 font-medium font-sans">
+                      No hay ingresos planificados registrados para este período.
+                    </div>
+                  );
+                }
+                return (
+                  <div className="space-y-4">
+                    <div className="overflow-x-auto border border-slate-100 rounded-lg">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50 text-[10px] text-slate-400 uppercase tracking-wider border-b border-slate-100 font-bold">
+                            <th className="py-2.5 px-3 font-sans">Fecha</th>
+                            <th className="py-2.5 px-3 font-sans">Detalle / Concepto</th>
+                            <th className="py-2.5 px-3 font-sans">Categoría</th>
+                            <th className="py-2.5 px-3 font-sans">Destina A</th>
+                            <th className="py-2.5 px-3 text-right font-sans">Monto</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                          {list.map(t => {
+                            const catObj = categories.find(c => c.id === t.category);
+                            const activeCard = debitCards.find(d => d.id === t.cardId) || creditCards.find(c => c.id === t.cardId);
+                            return (
+                              <tr key={t.id} className="hover:bg-slate-50/50 transition-colors">
+                                <td className="py-2 px-3 text-slate-450 font-mono text-[10px]">{t.date}</td>
+                                <td className="py-2 px-3 font-semibold text-slate-800">{t.description}</td>
+                                <td className="py-2 px-3 text-slate-600">
+                                  <span className="inline-flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: catObj?.color || '#D1D5DB' }}></span>
+                                    {catObj?.name || 'Ingreso'}
+                                  </span>
+                                </td>
+                                <td className="py-2 px-3 text-slate-500">
+                                  {activeCard ? activeCard.name : 'Efectivo / Default'}
+                                </td>
+                                <td className="py-2 px-3 text-right text-emerald-600 font-bold font-mono text-xs">
+                                  +${t.amount.toLocaleString()}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100/40 flex justify-between items-center text-emerald-800">
+                      <span className="font-semibold text-xs">Total Ingresos de este período:</span>
+                      <strong className="text-base font-bold font-mono">${monthlyIncomes.toLocaleString()}</strong>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {selectedKpi === 'projected_expenses' && (() => {
+                const list = transactions.filter(t => activePeriodMonths.includes(t.month) && t.type === 'expense');
+                if (list.length === 0) {
+                  return (
+                    <div className="py-8 text-center text-slate-400 font-medium">
+                      No hay gastos mensuales proyectados ni consumos registrados para este período.
+                    </div>
+                  );
+                }
+                return (
+                  <div className="space-y-4">
+                    <div className="overflow-x-auto border border-slate-100 rounded-lg">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50 text-[10px] text-slate-400 uppercase tracking-wider border-b border-slate-100 font-bold">
+                            <th className="py-2.5 px-3 font-sans">Fecha</th>
+                            <th className="py-2.5 px-3 font-sans">Detalle / Concepto</th>
+                            <th className="py-2.5 px-3 font-sans">Categoría</th>
+                            <th className="py-2.5 px-3 font-sans">Clase</th>
+                            <th className="py-2.5 px-3 font-sans">Pago</th>
+                            <th className="py-2.5 px-3 text-right font-sans">Monto</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                          {list.map(t => {
+                            const catObj = categories.find(c => c.id === t.category);
+                            
+                            // Classify expense class
+                            let expClass = 'Variable';
+                            let classColor = 'bg-slate-100 text-slate-600 border-slate-205';
+                            if (t.category === 'cat-housing' || t.description.toLowerCase().includes('alquiler') || t.description.toLowerCase().includes('rent')) {
+                              expClass = 'Vivienda';
+                              classColor = 'bg-blue-50 text-blue-700 border-blue-100';
+                            } else if (t.category === 'cat-subscriptions' || t.subscriptionId || t.isFixed) {
+                              expClass = 'Recurrente';
+                              classColor = 'bg-indigo-50 text-indigo-700 border-indigo-100';
+                            } else if (t.category === 'cat-installments' || t.installmentId) {
+                              expClass = 'Cuota';
+                              classColor = 'bg-amber-50 text-amber-750 border-amber-100';
+                            }
+
+                            // Payment method name
+                            const card = debitCards.find(d => d.id === t.cardId) || creditCards.find(c => c.id === t.cardId);
+                            let pMethod = t.paymentMethod === 'credit' ? 'Crédito' : (t.paymentMethod === 'transfer' ? 'Transferencia' : (t.paymentMethod === 'debit' ? 'Débito' : 'Efectivo'));
+                            if (card) {
+                              pMethod = card.name;
+                            }
+
+                            return (
+                              <tr key={t.id} className="hover:bg-slate-50/50 transition-colors">
+                                <td className="py-2 px-3 text-slate-450 font-mono text-[10px]">{t.date}</td>
+                                <td className="py-2 px-3 font-semibold text-slate-800">{t.description}</td>
+                                <td className="py-2 px-3 text-slate-650">
+                                  <span className="inline-flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: catObj?.color || '#D1D5DB' }}></span>
+                                    {catObj?.name || 'Otro'}
+                                  </span>
+                                </td>
+                                <td className="py-2 px-3">
+                                  <span className={`px-2 py-0.5 rounded text-[9px] border font-bold ${classColor}`}>
+                                    {expClass}
+                                  </span>
+                                </td>
+                                <td className="py-2 px-3 text-slate-500 font-medium max-w-[100px] truncate" title={pMethod}>
+                                  {pMethod}
+                                </td>
+                                <td className="py-2 px-3 text-right text-indigo-655 font-bold font-mono text-xs">
+                                  ${t.amount.toLocaleString()}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100/40 flex justify-between items-center text-indigo-800">
+                      <span className="font-semibold text-xs">Total Consumos / Gastos del período:</span>
+                      <strong className="text-base font-bold font-mono">${totalProjectedExpenses.toLocaleString()}</strong>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {selectedKpi === 'outflows' && (() => {
+                // 1. Direct expenses (Efectivo/Transferencia/Débito)
+                const directList = transactions.filter(t => {
+                  if (!activePeriodMonths.includes(t.month) || t.type !== 'expense' || t.paymentMethod === 'credit') {
+                    return false;
+                  }
+                  if (t.installmentId) {
+                    const inst = installments.find(i => i.id === t.installmentId);
+                    if (inst && inst.type === 'loan') {
+                      return false;
+                    }
+                  }
+                  return true;
+                });
+
+                // 2. Loans
+                const activeLoansList = installments.filter(inst => inst.type === 'loan');
+                const loanPaymentsList = activeLoansList
+                  .flatMap(inst => getProjectedInstallments(inst).map(proj => ({ ...proj, inst })))
+                  .filter(proj => activePeriodMonths.includes(proj.chargeMonth));
+
+                // 3. CC Payments Due
+                const tdcPaymentsList: { cardName: string; billingMonth: string; closingDate: string; dueDate: string; amount: number }[] = [];
+                activePeriodMonths.forEach(mStr => {
+                  const [mY, mMonth] = mStr.split('-');
+                  let prevYr = parseInt(mY, 10);
+                  let prevM = parseInt(mMonth, 10) - 1;
+                  if (prevM === 0) {
+                    prevM = 12;
+                    prevYr -= 1;
+                  }
+                  const prevMStr = `${prevYr}-${String(prevM).padStart(2, '0')}`;
+                  
+                  creditCards.forEach(card => {
+                    const prevStatement = computeCardStatementsForMonth(creditCards, transactions, installments, prevMStr)
+                      .find(s => s.cardId === card.id);
+                    if (prevStatement && prevStatement.billingBalance > 0) {
+                      tdcPaymentsList.push({
+                        cardName: card.name,
+                        billingMonth: prevMStr,
+                        closingDate: prevStatement.closingDateStr,
+                        dueDate: prevStatement.paymentDueDateStr,
+                        amount: prevStatement.billingBalance
+                      });
+                    }
+                  });
+                });
+
+                return (
+                  <div className="space-y-6">
+                    {/* Header explanatory tip */}
+                    <div className="p-3 bg-slate-50 border border-slate-200/60 rounded-lg text-[11px] text-slate-500 leading-normal flex items-start gap-1.5 font-medium">
+                      <Info className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                      <span>
+                        Los <strong>Egresos Reales (Flujo)</strong> representan las salidas directas de dinero en efectivo, transferencias bancarias o débitos, incluyendo la liquidación de las deudas en préstamos y de los cortes pasados de tus **Tarjetas de Crédito (TDC)** que vencen este mes. Las compras del mes con TDC <strong>no se listan aquí</strong>, pues se pagarán en el siguiente ciclo.
+                      </span>
+                    </div>
+
+                    {/* Section 1: Direct Expenses */}
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center bg-slate-100/70 py-1.5 px-3 rounded font-bold text-slate-700 text-[11px]">
+                        <span>1. GASTOS DIRECTOS / EFECTIVO / TRANSFERENCIA</span>
+                        <span className="text-rose-600 font-mono">${directExpenses.toLocaleString()}</span>
+                      </div>
+                      
+                      {directList.length === 0 ? (
+                        <p className="text-[11px] text-slate-400 italic px-3 py-1">Sin egresos directos este mes</p>
+                      ) : (
+                        <div className="overflow-x-auto border border-slate-100 rounded-lg">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="bg-slate-50/50 text-[9px] text-slate-400 uppercase tracking-wider border-b border-slate-100 font-bold">
+                                <th className="py-1.5 px-3 font-sans">Fecha</th>
+                                <th className="py-1.5 px-3 font-sans">Detalle / Concepto</th>
+                                <th className="py-1.5 px-3 font-sans">Categoría</th>
+                                <th className="py-1.5 px-3 font-sans">Origen / Cuenta</th>
+                                <th className="py-1.5 px-3 text-right font-sans">Monto</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 font-medium text-slate-600 text-[11px]">
+                              {directList.map(t => {
+                                const catObj = categories.find(c => c.id === t.category);
+                                const card = debitCards.find(d => d.id === t.cardId) || creditCards.find(c => c.id === t.cardId);
+                                const pMethod = card ? card.name : (t.paymentMethod === 'transfer' ? 'Transferencia' : (t.paymentMethod === 'debit' ? 'Débito' : 'Efectivo'));
+                                return (
+                                  <tr key={t.id} className="hover:bg-slate-50/50 transition-colors">
+                                    <td className="py-1.5 px-3 text-slate-450 font-mono text-[10px]">{t.date}</td>
+                                    <td className="py-1.5 px-3 font-semibold text-slate-800">{t.description}</td>
+                                    <td className="py-1.5 px-3 text-slate-500">{catObj?.name || 'Otros'}</td>
+                                    <td className="py-1.5 px-3 text-slate-500">{pMethod}</td>
+                                    <td className="py-1.5 px-3 text-right font-bold text-rose-500 font-mono">${t.amount.toLocaleString()}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Section 2: Loans */}
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center bg-slate-100/70 py-1.5 px-3 rounded font-bold text-slate-700 text-[11px]">
+                        <span>2. CUOTAS DE PRÉSTAMOS</span>
+                        <span className="text-amber-600 font-mono">${loanPayments.toLocaleString()}</span>
+                      </div>
+
+                      {loanPaymentsList.length === 0 ? (
+                        <p className="text-[11px] text-slate-400 italic px-3 py-1">Sin cuotas de préstamos en este periodo</p>
+                      ) : (
+                        <div className="overflow-x-auto border border-slate-100 rounded-lg">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="bg-slate-50/50 text-[9px] text-slate-400 uppercase tracking-wider border-b border-slate-100 font-bold">
+                                <th className="py-1.5 px-3 font-sans">Préstamo</th>
+                                <th className="py-1.5 px-3 font-sans">Cuota</th>
+                                <th className="py-1.5 px-3 font-sans">Vence</th>
+                                <th className="py-1.5 px-3 text-right font-sans">Monto</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 font-medium text-slate-600 text-[11px]">
+                              {loanPaymentsList.map((proj, idx) => (
+                                <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                  <td className="py-1.5 px-3 font-semibold text-slate-800">{proj.inst.description}</td>
+                                  <td className="py-1.5 px-3 text-slate-500">Cuota {proj.installmentIndex} de {proj.inst.installments}</td>
+                                  <td className="py-1.5 px-3 text-slate-455 font-mono text-[10px]">Día {proj.inst.loanDueDay || 'Hacia fin de mes'}</td>
+                                  <td className="py-1.5 px-3 text-right font-bold text-amber-500 font-mono">${proj.monthlyAmount.toLocaleString()}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Section 3: CC Payments Due */}
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center bg-slate-100/70 py-1.5 px-3 rounded font-bold text-slate-700 text-[11px]">
+                        <span>3. PAGO DEL CORTE MENSUAL DE TARJETAS DE CRÉDITO (TDC)</span>
+                        <span className="text-slate-750 font-bold font-mono">${totalCardPaymentsDue.toLocaleString()}</span>
+                      </div>
+
+                      {tdcPaymentsList.length === 0 ? (
+                        <p className="text-[11px] text-slate-400 italic px-3 py-1">Sin saldos pendientes de pago de TDC en este período</p>
+                      ) : (
+                        <div className="overflow-x-auto border border-slate-100 rounded-lg">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="bg-slate-50/50 text-[9px] text-slate-400 uppercase tracking-wider border-b border-slate-100 font-bold">
+                                <th className="py-1.5 px-3 font-sans">Tarjeta</th>
+                                <th className="py-1.5 px-3 font-sans">Mes del Estado / Corte</th>
+                                <th className="py-1.5 px-3 font-sans">Fecha de Pago Límite</th>
+                                <th className="py-1.5 px-3 text-right font-sans">Saldo a Pagar</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 font-medium text-slate-600 text-[11px]">
+                              {tdcPaymentsList.map((tdc, idx) => (
+                                <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                  <td className="py-1.5 px-3 font-semibold text-slate-800 flex items-center gap-1.5">
+                                    <div className="w-2.5 h-2.5 bg-slate-205 border border-slate-350 rounded-sm"></div>
+                                    {tdc.cardName}
+                                  </td>
+                                  <td className="py-1.5 px-3 text-slate-500">Corte correspondiente a {tdc.billingMonth}</td>
+                                  <td className="py-1.5 px-3 text-indigo-600 font-semibold text-[10px]">{tdc.dueDate}</td>
+                                  <td className="py-1.5 px-3 text-right font-bold text-indigo-700 font-mono">${tdc.amount.toLocaleString()}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="bg-rose-50/60 p-4 rounded-xl border border-rose-100/40 flex justify-between items-center text-rose-800">
+                      <span className="font-semibold text-xs text-rose-700">Total Salidas de Efectivo Reales:</span>
+                      <strong className="text-base font-bold font-mono">${totalOutflows.toLocaleString()}</strong>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {selectedKpi === 'savings' && (
+                <div className="space-y-6">
+                  {/* Header overview numbers */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="bg-emerald-50/40 p-3 rounded-lg border border-emerald-100/40 text-center">
+                      <span className="text-[10px] text-slate-455 uppercase font-bold tracking-wider block">Ingresos (+)</span>
+                      <strong className="text-emerald-700 text-sm font-mono">${monthlyIncomes.toLocaleString()}</strong>
+                    </div>
+                    <div className="bg-indigo-50/40 p-3 rounded-lg border border-indigo-100/40 text-center">
+                      <span className="text-[10px] text-slate-455 uppercase font-bold tracking-wider block">Gastos Proyectados (-)</span>
+                      <strong className="text-indigo-700 text-sm font-mono">${totalProjectedExpenses.toLocaleString()}</strong>
+                    </div>
+                    <div className={`p-3 rounded-lg border text-center ${projectedSavings >= 0 ? 'bg-blue-50/40 border-blue-100/40' : 'bg-amber-50/40 border-amber-100/40'}`}>
+                      <span className="text-[10px] text-slate-455 uppercase font-bold tracking-wider block">Ahorro Proyectado (=)</span>
+                      <strong className={`text-sm font-mono ${projectedSavings >= 0 ? 'text-blue-700' : 'text-amber-700'}`}>
+                        ${projectedSavings.toLocaleString()}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {/* Subtitle / Insight info */}
+                  <div className="p-3 bg-slate-50 border border-slate-200/60 rounded-lg text-slate-500 leading-normal flex items-start gap-1.5 font-medium">
+                    <PiggyBank className="w-4 h-4 text-slate-450 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-slate-800">Información de Ahorro:</span> 
+                      <span className="ml-1 text-slate-650">
+                        Con una tasa de ahorro del <strong className="text-blue-600">{projectedSavingsRate.toFixed(1)}%</strong>, tu presupuesto destina esta parte a tus metas de reserva. A continuación se desglosan las categorías principales de gasto que más influyen en tu ahorro:
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Categorized breakdown table */}
+                  <div className="space-y-3">
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Distribución de Gastos en el mes</h4>
+                    <div className="border border-slate-100 rounded-lg overflow-hidden">
+                      <div className="bg-slate-50 p-2.5 grid grid-cols-3 text-[10px] text-slate-400 font-bold border-b border-slate-100 uppercase tracking-wider">
+                        <span>Categoría</span>
+                        <span className="text-center">Porcentaje del Gasto</span>
+                        <span className="text-right">Monto Total</span>
+                      </div>
+
+                      <div className="divide-y divide-slate-100 font-medium text-xs text-slate-700">
+                        <div className="p-2.5 grid grid-cols-3 items-center hover:bg-slate-50/30 transition-colors">
+                          <span className="font-semibold text-slate-800 flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                            Vivienda y Alquiler
+                          </span>
+                          <span className="text-center text-slate-500 font-mono font-bold">
+                            {totalProjectedExpenses > 0 ? ((housingExpenses / totalProjectedExpenses) * 100).toFixed(1) : 0}%
+                          </span>
+                          <span className="text-right font-bold text-slate-800 font-mono">${housingExpenses.toLocaleString()}</span>
+                        </div>
+
+                        <div className="p-2.5 grid grid-cols-3 items-center hover:bg-slate-50/30 transition-colors">
+                          <span className="font-semibold text-slate-800 flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+                            Suscripciones y Servicios
+                          </span>
+                          <span className="text-center text-slate-500 font-mono font-bold">
+                            {totalProjectedExpenses > 0 ? ((subscriptionExpenses / totalProjectedExpenses) * 100).toFixed(1) : 0}%
+                          </span>
+                          <span className="text-right font-bold text-slate-800 font-mono">${subscriptionExpenses.toLocaleString()}</span>
+                        </div>
+
+                        <div className="p-2.5 grid grid-cols-3 items-center hover:bg-slate-50/30 transition-colors">
+                          <span className="font-semibold text-slate-800 flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                            Préstamos y Amortizaciones
+                          </span>
+                          <span className="text-center text-slate-500 font-mono font-bold">
+                            {totalProjectedExpenses > 0 ? ((installmentsExpenses / totalProjectedExpenses) * 100).toFixed(1) : 0}%
+                          </span>
+                          <span className="text-right font-bold text-slate-800 font-mono">${installmentsExpenses.toLocaleString()}</span>
+                        </div>
+
+                        <div className="p-2.5 grid grid-cols-3 items-center hover:bg-slate-50/30 transition-colors">
+                          <span className="font-semibold text-slate-800 flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                            Consumos y Variables
+                          </span>
+                          <span className="text-center text-slate-500 font-mono font-bold">
+                            {totalProjectedExpenses > 0 ? ((otherExpenses / totalProjectedExpenses) * 100).toFixed(1) : 0}%
+                          </span>
+                          <span className="text-right font-bold text-slate-800 font-mono">${otherExpenses.toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="pt-4 border-t border-slate-100 mt-4 shrink-0 flex justify-end">
+              <button
+                onClick={() => setSelectedKpi(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-medium rounded-lg transition-colors text-xs"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DETALLES DE CORTE DE TARJETA DIALOG MODAL */}
+      {selectedCardDetail && (() => {
+        const stmt = computeCardStatementsForMonth(creditCards, transactions, installments, selectedCardDetail.billingMonth)
+          .find(s => s.cardId === selectedCardDetail.cardId);
+        
+        const detailedCharges = stmt ? stmt.detailedCharges : [];
+        const billingBalance = stmt ? stmt.billingBalance : 0;
+        
+        const [bYear, bMonth] = selectedCardDetail.billingMonth.split('-');
+        const billingMonthEs = monthNamesEs[parseInt(bMonth, 10) - 1];
+        const displayBillingPeriod = `${billingMonthEs} ${bYear}`;
+
+        return (
+          <div id="card-statement-details-overlay" className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+            <div id="card-statement-details-modal" className="bg-white rounded-xl shadow-xl border border-slate-150 max-w-2xl w-full p-6 text-xs flex flex-col max-h-[85vh]">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4 shrink-0">
+                <h3 className="text-base font-bold text-slate-800 tracking-tight flex items-center gap-2">
+                  <div className="p-1.5 bg-blue-50 text-blue-600 rounded">
+                    <CreditCard className="w-4 h-4" />
+                  </div>
+                  <span>Detalle de Consumos en: {selectedCardDetail.cardName}</span>
+                </h3>
+                <button 
+                  onClick={() => setSelectedCardDetail(null)}
+                  className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-all text-sm font-semibold"
+                  aria-label="Cerrar modal"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Explanatory banner */}
+              <div className="mb-4 p-3 bg-blue-50/50 rounded-lg text-blue-800 leading-normal shrink-0">
+                <span className="font-semibold">Período de Facturación que se paga en {monthLabel}: </span>
+                {stmt ? (
+                  <>
+                    <strong className="font-semibold text-slate-800 mr-1 pr-1">{displayBillingPeriod}</strong> 
+                    (Corte al <span className="font-semibold text-slate-800">{stmt.closingDateStr}</span>, límite de pago el <span className="font-bold text-indigo-700">{stmt.paymentDueDateStr}</span>)
+                  </>
+                ) : (
+                  <strong>{displayBillingPeriod}</strong>
+                )}
+              </div>
+
+              {/* Scrollable table details */}
+              <div className="overflow-y-auto flex-1 pr-1 py-1 space-y-4">
+                {detailedCharges.length === 0 ? (
+                  <div className="py-8 text-center text-slate-400 font-medium font-sans">
+                    No se registran cargos facturados para esta tarjeta en este ciclo. Las compras actuales se facturarán en el siguiente corte.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto border border-slate-100 rounded-lg">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 text-[10px] text-slate-400 uppercase tracking-wider border-b border-slate-100 font-bold">
+                          <th className="py-2.5 px-3 font-sans">Fecha</th>
+                          <th className="py-2.5 px-3 font-sans">Detalle del Cargo / Compra</th>
+                          <th className="py-2.5 px-3 font-sans">Clase / Tipo</th>
+                          <th className="py-2.5 px-3 text-right font-sans">Monto</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                        {detailedCharges.map((charge) => (
+                          <tr key={charge.id} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="py-2 px-3 text-slate-450 font-mono text-[10px]">{charge.date}</td>
+                            <td className="py-2 px-3 font-semibold text-slate-800">{charge.description}</td>
+                            <td className="py-2 px-3">
+                              {charge.isInstallment ? (
+                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-100">
+                                  Cuota Mensual {charge.installmentIndex}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                  Compra Corriente
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3 text-right text-slate-800 font-bold font-mono text-xs">
+                              ${charge.amount.toLocaleString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Total Summary Row */}
+              <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between shrink-0">
+                <div className="text-xs text-slate-500">
+                  <span>Monto Total a Pagar / Liquidar de este Corte:</span>
+                </div>
+                <div className="text-right flex items-center gap-2">
+                  <span className="text-xs text-slate-400">Total:</span>
+                  <strong className="text-lg font-extrabold text-slate-800 font-mono">${billingBalance.toLocaleString()}</strong>
+                </div>
+              </div>
+
+              {/* Footer action buttons */}
+              <div className="mt-4 pt-3 border-t border-slate-100 shrink-0 flex justify-end gap-2">
+                <button
+                  onClick={() => {
+                    setSelectedCardDetail(null);
+                    onNavigate('estado-cuenta');
+                  }}
+                  className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg transition-colors text-xs"
+                >
+                  Ver Todos los Cortes
+                </button>
+                <button
+                  onClick={() => setSelectedCardDetail(null)}
+                  className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white font-medium rounded-lg transition-colors text-xs"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
