@@ -296,10 +296,10 @@ export function computeMonthlyAccountBalances(
   const targetYear = parseInt(targetYearStr, 10);
   const targetMonthNum = parseInt(targetMonthStr, 10);
 
-  // Initialize the balances of all cards to 0 at the start of original timeline (January 2026)
+  // Initialize the balances of all cards to their baseline balance at the start of original timeline (January 2026)
   const currentBalances: Record<string, number> = {};
   debitCards.forEach(d => {
-    currentBalances[d.id] = 0;
+    currentBalances[d.id] = d.balance || 0;
   });
 
   const flows: Record<string, MonthlyAccountFlow> = {};
@@ -345,7 +345,14 @@ export function computeMonthlyAccountBalances(
         if (cid) {
           if (t.type === 'income') {
             monthIncomes[cid] = (monthIncomes[cid] || 0) + t.amount;
-          } else if (t.paymentMethod === 'debit' || t.paymentMethod === 'transfer' || t.paymentMethod === 'cash') {
+          } else if (t.type === 'expense' && (t.paymentMethod === 'debit' || t.paymentMethod === 'transfer' || t.paymentMethod === 'cash')) {
+            // Evitar doble conteo: si la transacción proviene de una cuota de préstamo, se calcula por separado de manera automática abajo
+            if (t.installmentId) {
+              const inst = installments.find(i => i.id === t.installmentId);
+              if (inst && inst.type === 'loan') {
+                return;
+              }
+            }
             monthExpenses[cid] = (monthExpenses[cid] || 0) + t.amount;
           }
         }

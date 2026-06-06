@@ -182,13 +182,19 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
   // Account flows for the selectedMonth balance rollover logic
   const accountFlows = computeMonthlyAccountBalances(debitCards, transactions, creditCards, installments, selectedMonth);
 
+  const firstMonthOfPeriod = activePeriodMonths[0];
+  const lastMonthOfPeriod = activePeriodMonths[activePeriodMonths.length - 1];
+
+  const initialAccountFlows = computeMonthlyAccountBalances(debitCards, transactions, creditCards, installments, firstMonthOfPeriod);
+  const finalAccountFlows = computeMonthlyAccountBalances(debitCards, transactions, creditCards, installments, lastMonthOfPeriod);
+
   const totalInitialCashBalance = debitCards.reduce((sum, d) => {
-    const flow = accountFlows[d.id];
+    const flow = initialAccountFlows[d.id];
     return sum + (flow ? flow.initialBalance : d.balance);
   }, 0);
 
   const totalFinalCashBalance = debitCards.reduce((sum, d) => {
-    const flow = accountFlows[d.id];
+    const flow = finalAccountFlows[d.id];
     return sum + (flow ? flow.finalBalance : d.balance);
   }, 0);
 
