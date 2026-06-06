@@ -4,7 +4,7 @@ import {
   ChevronRight, ArrowRight, Layers, DollarSign 
 } from 'lucide-react';
 import { AppState, CreditCard as CardType } from '../types';
-import { computeCardStatementsForMonth } from '../utils/financeUtils';
+import { computeCardStatementsForMonth, getBillingPeriodDates } from '../utils/financeUtils';
 
 interface CardStatementSectionProps {
   state: AppState;
@@ -31,6 +31,11 @@ export default function CardStatementSection({ state }: CardStatementSectionProp
   const statements = computeCardStatementsForMonth(creditCards, transactions, installments, selectedMonth);
   const activeStatement = statements.find(s => s.cardId === selectedCardId);
   const activeCardObj = creditCards.find(c => c.id === selectedCardId);
+
+  // Calculate billing period dates
+  const billingPeriod = activeCardObj 
+    ? getBillingPeriodDates(selectedMonth, activeCardObj.closingDay)
+    : null;
 
   // Helper payment month display (due date month)
   let paymentMonthName = '';
@@ -98,9 +103,11 @@ export default function CardStatementSection({ state }: CardStatementSectionProp
               <div>
                 <span className="text-[10px] uppercase text-slate-400 tracking-wider font-semibold">Saldo al Corte ({monthName})</span>
                 <div className="text-3xl font-extrabold text-white mt-1">${activeStatement.billingBalance.toLocaleString()}</div>
-                <p className="text-[10px] text-slate-350 mt-1">
-                  Corresponde a transacciones cargadas entre el <strong className="text-white">{monthName} {activeCardObj?.closingDay}</strong> anterior y el actual.
-                </p>
+                {billingPeriod && (
+                  <p className="text-[10px] text-slate-350 mt-1">
+                    Corresponde a consumos entre el <strong className="text-white">{billingPeriod.startDateEs}</strong> y el <strong className="text-white">{billingPeriod.endDateEs}</strong>.
+                  </p>
+                )}
               </div>
 
               {/* Progress bar of utilization limit */}
@@ -148,7 +155,9 @@ export default function CardStatementSection({ state }: CardStatementSectionProp
               <div className="flex flex-col items-center justify-center py-16 text-slate-450 text-xs text-center">
                 <ShieldCheck className="w-10 h-10 text-slate-300 mb-2" />
                 <p className="font-semibold text-slate-500">¡Estado de cuenta impecable!</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">No se registraron cargos ni compras a plazos que cierren formalmente en este mes.</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  No se registraron cargos ni cuotas{billingPeriod ? ` entre el ${billingPeriod.startDateEs} y el ${billingPeriod.endDateEs}` : ' que cierren formalmente en este mes'}.
+                </p>
               </div>
             ) : (
               <div className="overflow-x-auto">

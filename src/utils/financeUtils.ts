@@ -74,7 +74,7 @@ export interface ProjectedInstallment {
  */
 export function getProjectedInstallments(purchase: InstallmentPurchase): ProjectedInstallment[] {
   const list: ProjectedInstallment[] = [];
-  const parts = purchase.firstChargeDate.split('-');
+  const parts = (purchase.purchaseDate || purchase.firstChargeDate).split('-');
   if (parts.length !== 3) return [];
 
   const startYear = parseInt(parts[0], 10);
@@ -117,6 +117,53 @@ export function getProjectedInstallments(purchase: InstallmentPurchase): Project
   }
 
   return list;
+}
+
+export interface CardBillingPeriod {
+  startDateStr: string; // YYYY-MM-DD
+  endDateStr: string;   // YYYY-MM-DD
+  startDateEs: string;  // Spanish verbal format
+  endDateEs: string;    // Spanish verbal format
+}
+
+/**
+ * Calculates the exact start and end dates of a billing cycle.
+ */
+export function getBillingPeriodDates(billingMonth: string, closingDay: number): CardBillingPeriod {
+  const parts = billingMonth.split('-');
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1; // 0-indexed
+
+  // End date is closingDay of this billing month
+  const endDate = new Date(year, month, closingDay, 12, 0, 0);
+  
+  // Previous closing date is closingDay of the previous month
+  const prevClosingDate = new Date(year, month - 1, closingDay, 12, 0, 0);
+  // Start date is 1 day after the previous closing date
+  const startDate = new Date(prevClosingDate);
+  startDate.setDate(startDate.getDate() + 1);
+
+  const formatDate = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dayStr = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dayStr}`;
+  };
+
+  const formatDateEs = (d: Date) => {
+    const monthNamesEs = [
+      'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+    ];
+    return `${d.getDate()} de ${monthNamesEs[d.getMonth()]}`;
+  };
+
+  return {
+    startDateStr: formatDate(startDate),
+    endDateStr: formatDate(endDate),
+    startDateEs: formatDateEs(startDate),
+    endDateEs: formatDateEs(endDate)
+  };
 }
 
 /**

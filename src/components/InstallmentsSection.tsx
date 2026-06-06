@@ -29,9 +29,6 @@ export default function InstallmentsSection({
   const [purchaseDate, setPurchaseDate] = useState(() => {
     return new Date().toISOString().split('T')[0];
   });
-  const [firstChargeDate, setFirstChargeDate] = useState(() => {
-    return new Date().toISOString().split('T')[0];
-  });
   const [loanDueDay, setLoanDueDay] = useState('10');
   const [customMonthly, setCustomMonthly] = useState('');
 
@@ -68,7 +65,7 @@ export default function InstallmentsSection({
       totalAmount: amt,
       installments: instCount,
       purchaseDate,
-      firstChargeDate,
+      firstChargeDate: purchaseDate,
       loanDueDay: type === 'loan' ? parseInt(loanDueDay, 10) : undefined,
       monthlyPayment
     });
@@ -184,35 +181,19 @@ export default function InstallmentsSection({
               </div>
             )}
 
-            {/* Dates row */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label htmlFor="inst-purchase-date" className="flex items-center gap-1.5 text-slate-500">
-                  <Calendar className="w-3.5 h-3.5" /> Comprado el
-                </label>
-                <input 
-                  id="inst-purchase-date"
-                  type="date"
-                  value={purchaseDate}
-                  onChange={(e) => setPurchaseDate(e.target.value)}
-                  className="w-full px-2 py-2 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-none text-slate-800"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label htmlFor="inst-charge-date" className="flex items-center gap-1.5 text-slate-500">
-                  <Calendar className="w-3.5 h-3.5" /> Primer Retiro / Cargo
-                </label>
-                <input 
-                  id="inst-charge-date"
-                  type="date"
-                  value={firstChargeDate}
-                  onChange={(e) => setFirstChargeDate(e.target.value)}
-                  className="w-full px-2 py-2 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-none text-slate-800"
-                  required
-                />
-              </div>
+            {/* Date input */}
+            <div className="space-y-1.5">
+              <label htmlFor="inst-purchase-date" className="flex items-center gap-1.5 text-slate-500">
+                <Calendar className="w-3.5 h-3.5" /> Fecha de Compra / Otorgamiento
+              </label>
+              <input 
+                id="inst-purchase-date"
+                type="date"
+                value={purchaseDate}
+                onChange={(e) => setPurchaseDate(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-none text-slate-800"
+                required
+              />
             </div>
 
             {/* If Loan, specify monthly payment day */}
