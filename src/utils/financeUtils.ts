@@ -304,9 +304,9 @@ export function computeMonthlyAccountBalances(
 
   const flows: Record<string, MonthlyAccountFlow> = {};
 
-  // Dynamically set starting point to avoid infinite loops, but default starting point is 2026-01
+  // Dynamically set starting point to avoid infinite loops, but default starting point is 2206-01, here we always start from month 1 to ensure proper rollover.
   const startYear = Math.min(2026, targetYear);
-  const startMonth = startYear === targetYear ? targetMonthNum : 1;
+  const startMonth = 1;
 
   let currentYear = startYear;
   let currentMonth = startMonth;
@@ -343,57 +343,16 @@ export function computeMonthlyAccountBalances(
         }
 
         if (cid) {
-          if (t.paymentMethod === 'debit' || t.paymentMethod === 'transfer' || t.paymentMethod === 'cash') {
-            if (t.type === 'income') {
-              monthIncomes[cid] = (monthIncomes[cid] || 0) + t.amount;
-            } else {
-              monthExpenses[cid] = (monthExpenses[cid] || 0) + t.amount;
-            }
+          if (t.type === 'income') {
+            monthIncomes[cid] = (monthIncomes[cid] || 0) + t.amount;
+          } else if (t.paymentMethod === 'debit' || t.paymentMethod === 'transfer' || t.paymentMethod === 'cash') {
+            monthExpenses[cid] = (monthExpenses[cid] || 0) + t.amount;
           }
         }
       }
     });
 
-    // 1. Credit Card statement payments due in activeMonthStr
-    // A statement closing in (activeMonthStr - 1 month) is PAID in activeMonthStr.
-    let prevYr = currentYear;
-    let prevM = currentMonth - 1;
-    if (prevM === 0) {
-      prevM = 12;
-      prevYr -= 1;
-    }
-    const prevMStr = `${prevYr}-${String(prevM).padStart(2, '0')}`;
-
-    // For each credit card, compute the statement for prevMStr
-    const prevStatements = computeCardStatementsForMonth(creditCards, transactions, installments, prevMStr);
-    prevStatements.forEach(statement => {
-      if (statement.billingBalance > 0) {
-        // Find checking account or main debit card to deduct this payment from
-        const defCheckingAcc = debitCards.find(d => d.id !== 'deb-cash-pocket' && !d.name.toLowerCase().includes('efectivo')) 
-          || (debitCards.length > 0 ? debitCards[0] : null);
-        
-        if (defCheckingAcc) {
-          monthExpenses[defCheckingAcc.id] = (monthExpenses[defCheckingAcc.id] || 0) + statement.billingBalance;
-        }
-      }
-    });
-
-    // 2. Loans projected payment due in activeMonthStr
-    installments.forEach(inst => {
-      if (inst.type === 'loan') {
-        const projected = getProjectedInstallments(inst);
-        projected.forEach(proj => {
-          if (proj.chargeMonth === activeMonthStr) {
-            const defCheckingAcc = debitCards.find(d => d.id !== 'deb-cash-pocket' && !d.name.toLowerCase().includes('efectivo')) 
-              || (debitCards.length > 0 ? debitCards[0] : null);
-            
-            if (defCheckingAcc) {
-              monthExpenses[defCheckingAcc.id] = (monthExpenses[defCheckingAcc.id] || 0) + proj.monthlyAmount;
-            }
-          }
-        });
-      }
-    });
+    // Automatically calculated loans/cc payments are skipped to keep account tracking 100% manually auditable and intuitive.
 
     debitCards.forEach(d => {
       const initBal = currentBalances[d.id] || 0;

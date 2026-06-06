@@ -5,7 +5,8 @@ import {
 } from 'recharts';
 import { 
   DollarSign, TrendingUp, TrendingDown, PiggyBank, CreditCard, Wallet, 
-  AlertCircle, ChevronRight, Briefcase, Sparkles, Home, Calendar, Info
+  AlertCircle, ChevronRight, Briefcase, Sparkles, Home, Calendar, Info, X, Eye,
+  Coins
 } from 'lucide-react';
 import { AppState, Transaction, InstallmentPurchase } from '../types';
 import { getProjectedInstallments, computeCardStatementsForMonth, computeMonthlyAccountBalances } from '../utils/financeUtils';
@@ -21,6 +22,7 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
   const [viewType, setViewType] = React.useState<'monthly' | 'cumulative'>('monthly');
   const [selectedKpi, setSelectedKpi] = React.useState<'incomes' | 'projected_expenses' | 'outflows' | 'savings' | null>(null);
   const [selectedCardDetail, setSelectedCardDetail] = React.useState<{ cardId: string; billingMonth: string; cardName: string } | null>(null);
+  const [selectedAuditAccount, setSelectedAuditAccount] = React.useState<any | null>(null);
 
   const [year, month] = selectedMonth.split('-');
   const monthNamesEs = [
@@ -28,6 +30,32 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ];
   const monthLabel = `${monthNamesEs[parseInt(month, 10) - 1]} ${year}`;
+
+  const getAccountTransactionsForMonth = (accountId: string) => {
+    return transactions.filter(t => {
+      if (t.month !== selectedMonth) return false;
+      
+      let cid = t.cardId;
+      if (!cid) {
+        if (t.paymentMethod === 'cash') {
+          const cashAcc = debitCards.find(d => d.id === 'deb-cash-pocket' || d.name.toLowerCase().includes('efectivo') || d.name.toLowerCase().includes('cash'));
+          if (cashAcc) cid = cashAcc.id;
+        } else if (t.paymentMethod === 'debit' || t.paymentMethod === 'transfer') {
+          const checkingAcc = debitCards.find(d => d.id !== 'deb-cash-pocket' && !d.name.toLowerCase().includes('efectivo'));
+          if (checkingAcc) {
+            cid = checkingAcc.id;
+          } else if (debitCards.length > 0) {
+            cid = debitCards[0].id;
+          }
+        }
+      }
+      
+      if (cid !== accountId) return false;
+      
+      if (t.type === 'income') return true;
+      return t.paymentMethod === 'debit' || t.paymentMethod === 'transfer' || t.paymentMethod === 'cash';
+    });
+  };
 
   const selectedYearStr = year;
   const selectedMonthNum = parseInt(month, 10);
@@ -153,6 +181,16 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
 
   // Account flows for the selectedMonth balance rollover logic
   const accountFlows = computeMonthlyAccountBalances(debitCards, transactions, creditCards, installments, selectedMonth);
+
+  const totalInitialCashBalance = debitCards.reduce((sum, d) => {
+    const flow = accountFlows[d.id];
+    return sum + (flow ? flow.initialBalance : d.balance);
+  }, 0);
+
+  const totalFinalCashBalance = debitCards.reduce((sum, d) => {
+    const flow = accountFlows[d.id];
+    return sum + (flow ? flow.finalBalance : d.balance);
+  }, 0);
 
   // Pie chart expenses split by Category
   const categorySplitMap: { [key: string]: { name: string; value: number; color: string } } = {};
@@ -324,7 +362,28 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        {/* KPI: Saldo Efectivo Inicial */}
+        <div 
+          className="bg-white p-5 rounded-xl border border-slate-100 shadow-xs flex items-start justify-between hover:shadow-md hover:scale-[1.01] transition-all duration-200 group" 
+          id="kpi-initial-cash"
+          title="Saldo total en efectivo/débito al inicio de este mes"
+        >
+          <div className="space-y-1.5 min-w-0">
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider group-hover:text-slate-500 transition-colors truncate">Efectivo Inicial</span>
+            </div>
+            <div className="text-2xl font-bold text-slate-600">${totalInitialCashBalance.toLocaleString()}</div>
+            <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1 truncate">
+              <Wallet className="w-3 h-3 text-slate-400" />
+              Cuentas líquidas al inicio de mes
+            </p>
+          </div>
+          <div className="p-2.5 bg-slate-50 text-slate-500 rounded-lg group-hover:bg-slate-600 group-hover:text-white transition-colors duration-200 shrink-0">
+            <Wallet className="w-5 h-5" />
+          </div>
+        </div>
+
         {/* KPI: Incomes */}
         <div 
           onClick={() => setSelectedKpi('incomes')}
@@ -332,18 +391,18 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
           id="kpi-incomes"
           title="Ver desglose de Ingresos Planificados"
         >
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 min-w-0">
             <div className="flex items-center gap-1">
-              <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider group-hover:text-slate-500 transition-colors">Ingresos Planificados</span>
-              <span className="text-[9px] text-emerald-500 font-bold bg-emerald-50 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">Ver</span>
+              <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider group-hover:text-slate-500 transition-colors truncate">Ingresos Planificados</span>
+              <span className="text-[9px] text-emerald-500 font-bold bg-emerald-50 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity shrink-0">Ver</span>
             </div>
             <div className="text-2xl font-bold text-emerald-600">${monthlyIncomes.toLocaleString()}</div>
-            <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
+            <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1 truncate">
               <TrendingUp className="w-3 h-3 text-emerald-500" />
               Sueldos y otros ingresos fijos
             </p>
           </div>
-          <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-200">
+          <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-200 shrink-0">
             <DollarSign className="w-5 h-5" />
           </div>
         </div>
@@ -355,18 +414,18 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
           id="kpi-projected-expenses"
           title="Ver desglose del Gasto Proyectado"
         >
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 min-w-0">
             <div className="flex items-center gap-1">
-              <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider group-hover:text-slate-500 transition-colors">Gasto Proyectado (Total)</span>
-              <span className="text-[9px] text-indigo-500 font-bold bg-indigo-50 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">Ver</span>
+              <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider group-hover:text-slate-500 transition-colors truncate">Gasto Proyectado (Total)</span>
+              <span className="text-[9px] text-indigo-500 font-bold bg-indigo-50 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity shrink-0">Ver</span>
             </div>
             <div className="text-2xl font-bold text-indigo-600">${totalProjectedExpenses.toLocaleString()}</div>
-            <p className="text-[11px] font-medium text-slate-500 flex items-center gap-1" title="Suma compromisos incurridos o fijos de este mes">
+            <p className="text-[11px] font-medium text-slate-500 flex items-center gap-1 truncate" title="Suma compromisos incurridos o fijos de este mes">
               <Sparkles className="w-3 h-3 text-indigo-500" />
               Compromisos, fijos y variables
             </p>
           </div>
-          <div className="p-2.5 bg-indigo-50 text-indigo-650 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-200">
+          <div className="p-2.5 bg-indigo-50 text-indigo-650 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-200 shrink-0">
             <Sparkles className="w-5 h-5" />
           </div>
         </div>
@@ -378,18 +437,18 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
           id="kpi-expenses"
           title="Ver desglose de Egresos Reales"
         >
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 min-w-0">
             <div className="flex items-center gap-1">
-              <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider group-hover:text-slate-500 transition-colors">Egresos Reales (Flujo)</span>
-              <span className="text-[9px] text-rose-500 font-bold bg-rose-50 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">Ver</span>
+              <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider group-hover:text-slate-500 transition-colors truncate">Egresos Reales (Flujo)</span>
+              <span className="text-[9px] text-rose-500 font-bold bg-rose-50 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity shrink-0">Ver</span>
             </div>
             <div className="text-2xl font-bold text-rose-600">${totalOutflows.toLocaleString()}</div>
-            <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
+            <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1 truncate">
               <TrendingDown className="w-3 h-3 text-rose-400" />
               Directos + Cuota Préstamo + TDC
             </p>
           </div>
-          <div className="p-2.5 bg-rose-50 text-rose-600 rounded-lg group-hover:bg-rose-600 group-hover:text-white transition-colors duration-200">
+          <div className="p-2.5 bg-rose-50 text-rose-600 rounded-lg group-hover:bg-rose-600 group-hover:text-white transition-colors duration-200 shrink-0">
             <TrendingDown className="w-5 h-5" />
           </div>
         </div>
@@ -401,21 +460,42 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
           id="kpi-savings"
           title="Ver desglose de Ahorro Neto Proyectado"
         >
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 min-w-0">
             <div className="flex items-center gap-1">
-              <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider group-hover:text-slate-500 transition-colors">Ahorro Proyectado</span>
-              <span className="text-[9px] text-blue-500 font-bold bg-blue-50 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">Ver</span>
+              <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider group-hover:text-slate-500 transition-colors truncate">Ahorro Proyectado</span>
+              <span className="text-[9px] text-blue-500 font-bold bg-blue-50 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity shrink-0">Ver</span>
             </div>
             <div className={`text-2xl font-bold ${projectedSavings >= 0 ? 'text-blue-600' : 'text-amber-600'}`}>
               ${projectedSavings.toLocaleString()}
             </div>
-            <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
+            <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1 truncate">
               <PiggyBank className="w-3 h-3 text-blue-500" />
-              Tasa de ahorro: <span className="font-bold text-blue-600">{projectedSavingsRate.toFixed(1)}%</span>
-            </div>
+              Tasa: <span className="font-bold text-blue-600">{projectedSavingsRate.toFixed(1)}%</span>
+            </p>
           </div>
-          <div className={`p-2.5 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors duration-200 ${projectedSavings >= 0 ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
+          <div className={`p-2.5 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors duration-200 shrink-0 ${projectedSavings >= 0 ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
             <PiggyBank className="w-5 h-5" />
+          </div>
+        </div>
+
+        {/* KPI: Saldo Efectivo Final */}
+        <div 
+          className="bg-white p-5 rounded-xl border border-emerald-50 shadow-xs flex items-start justify-between hover:shadow-md hover:scale-[1.01] hover:border-emerald-200 transition-all duration-200 group" 
+          id="kpi-final-cash"
+          title="Saldo total en efectivo/débito proyectado al final de este mes"
+        >
+          <div className="space-y-1.5 min-w-0">
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider group-hover:text-slate-500 transition-colors truncate">Efectivo Final</span>
+            </div>
+            <div className="text-2xl font-extrabold text-emerald-600">${totalFinalCashBalance.toLocaleString()}</div>
+            <p className="text-[11px] text-emerald-600 font-bold flex items-center gap-1 truncate">
+              <Coins className="w-3 h-3 text-emerald-500" />
+              Caja proyectada a fin de mes
+            </p>
+          </div>
+          <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-200 shrink-0">
+            <Coins className="w-5 h-5" />
           </div>
         </div>
       </div>
@@ -741,29 +821,40 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
                 Configurar Cuentas <ChevronRight className="w-3 h-3" />
               </button>
             </h2>
-            <p className="text-xs text-slate-400 mb-4 py-1.5 px-3 bg-emerald-50/50 rounded-lg text-emerald-800">
-              Muestra el Saldo Inicial, variaciones en el mes y el Saldo Final proyectado.
-            </p>
+            <div className="text-xs text-slate-400 mb-4 py-1.5 px-3 bg-emerald-50/50 rounded-lg text-emerald-800 flex items-center justify-between">
+              <span>Muestra el Saldo Inicial, variaciones y Saldo Final proyectado.</span>
+              <span className="font-bold shrink-0 text-[10px] bg-emerald-100 px-1.5 py-0.5 rounded text-emerald-900 animate-pulse">Clic para auditar</span>
+            </div>
 
             <div className="space-y-3">
               {debitCards.map((bank, i) => {
                 const flow = accountFlows[bank.id] || { initialBalance: bank.balance, finalBalance: bank.balance, incomes: 0, expenses: 0 };
                 const netVariance = flow.incomes - flow.expenses;
                 return (
-                  <div key={i} className="p-3 bg-slate-50 border border-slate-100/60 rounded-xl hover:bg-slate-150/20 transition-all">
+                  <div 
+                    key={bank.id || i} 
+                    onClick={() => setSelectedAuditAccount(bank)}
+                    className="group p-3 bg-slate-50 hover:bg-slate-100/70 border border-slate-100/60 hover:border-slate-200 rounded-xl transition-all cursor-pointer select-none"
+                    title="Haga clic para auditar movimientos de esta cuenta"
+                  >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="p-2 bg-emerald-100/30 rounded-md text-emerald-600">
-                          <Wallet className="w-3.5 h-3.5" />
+                        <div className="p-2 bg-emerald-100/30 rounded-md text-emerald-600 transition-colors group-hover:bg-emerald-100">
+                          <Wallet className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
                         </div>
                         <div>
-                          <h4 className="text-xs font-semibold text-slate-700 truncate max-w-[120px]">{bank.name}</h4>
+                          <div className="flex items-center gap-1">
+                            <h4 className="text-xs font-bold text-slate-700 truncate group-hover:text-emerald-700 max-w-[120px] transition-colors">{bank.name}</h4>
+                            <span className="text-[7.5px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded flex items-center gap-0.5 opacity-80 group-hover:opacity-100">
+                              <Eye className="w-1.5 h-1.5" /> Ver
+                            </span>
+                          </div>
                           <span className="text-[9px] text-slate-400 font-medium">Débito / Disponible</span>
                         </div>
                       </div>
                       <div className="text-right">
                         <span className="text-[9px] text-slate-400 block uppercase font-mono">Saldo Final</span>
-                        <span className="text-sm font-bold text-emerald-600">${flow.finalBalance.toLocaleString()}</span>
+                        <span className="text-sm font-extrabold text-emerald-600 group-hover:scale-105 transition-transform block">${flow.finalBalance.toLocaleString()}</span>
                       </div>
                     </div>
                     
@@ -1393,6 +1484,113 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
                   className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white font-medium rounded-lg transition-colors text-xs"
                 >
                   Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* DETALLES DE AUDITORIA DE FONDOS LIQUIDOS */}
+      {selectedAuditAccount && (() => {
+        const flow = accountFlows[selectedAuditAccount.id] || { initialBalance: selectedAuditAccount.balance, finalBalance: selectedAuditAccount.balance, incomes: 0, expenses: 0 };
+        const accountTxs = getAccountTransactionsForMonth(selectedAuditAccount.id);
+        const netVariance = flow.incomes - flow.expenses;
+
+        return (
+          <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in" onClick={() => setSelectedAuditAccount(null)}>
+            <div 
+              className="bg-white rounded-xl shadow-xl border border-slate-150 max-w-xl w-full p-6 text-xs flex flex-col max-h-[85vh] animate-scale-up"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4 shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-emerald-50 text-emerald-700 rounded-lg">
+                    <Wallet className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800">Auditoría Real-Time: {selectedAuditAccount.name}</h3>
+                    <p className="text-[10px] text-slate-500">Período de análisis: {monthLabel}</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setSelectedAuditAccount(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Math card */}
+              <div className="grid grid-cols-3 gap-3 p-4 bg-slate-50 border border-slate-100 rounded-xl mb-4 text-center shrink-0">
+                <div>
+                  <span className="text-[10px] text-slate-400 block mb-0.5">Saldo Inicial ({monthLabel})</span>
+                  <span className="text-sm font-bold text-slate-700">${flow.initialBalance.toLocaleString()}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block mb-0.5">Movimiento Neto</span>
+                  <span className={`text-sm font-bold ${netVariance >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
+                    {netVariance >= 0 ? "+" : ""}${netVariance.toLocaleString()}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block mb-0.5">Saldo Final Proyectado</span>
+                  <span className="text-sm font-extrabold text-emerald-600">${flow.finalBalance.toLocaleString()}</span>
+                </div>
+              </div>
+
+              {/* Explanatory notice */}
+              <div className="p-3 bg-indigo-50/70 border border-indigo-100 text-indigo-900 rounded-lg text-[10.5px] leading-relaxed mb-4 shrink-0">
+                <p className="font-bold mb-1 flex items-center gap-1 text-indigo-950">
+                  <Info className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                  ¿Cómo funciona este cálculo?
+                </p>
+                <p>
+                  Este saldo se calcula tomando el <strong>Saldo Inicial</strong> del mes, sumando todos los <strong>Ingresos</strong> (+) de esta cuenta, y restando únicamente los gastos pagados con <strong>Efectivo, Débito o Transferencia</strong> (-). Se omiten consumos o pagos automáticos de tarjetas de crédito para que la caja real sea exacta y auditable con tus transacciones físicas.
+                </p>
+              </div>
+
+              {/* Transactions details */}
+              <h4 className="font-semibold text-slate-700 mb-2 flex items-center justify-between shrink-0">
+                <span>Movimientos que afectan liquidez ({accountTxs.length})</span>
+                <span className="text-[10px] text-slate-400 font-normal">Solo flujo de efectivo líquido</span>
+              </h4>
+
+              <div className="overflow-y-auto space-y-2 flex-1 pr-1 max-h-[220px] min-h-[100px]">
+                {accountTxs.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                    No hay transacciones registradas de tipo Ingreso, Débito o Transferencia en {monthLabel}.
+                  </div>
+                ) : (
+                  accountTxs.map(t => {
+                    const isIncome = t.type === 'income';
+                    return (
+                      <div key={t.id} className="p-2.5 bg-white border border-slate-100 hover:border-slate-200 rounded-lg flex items-center justify-between transition-colors">
+                        <div className="min-w-0 pr-2">
+                          <div className="font-semibold text-slate-700 truncate">{t.description}</div>
+                          <div className="flex items-center gap-2 text-[9px] text-slate-400 mt-0.5 font-medium">
+                            <span>{t.date}</span>
+                            <span>•</span>
+                            <span className="uppercase text-[8px] bg-slate-100 px-1 rounded text-slate-600 font-mono">
+                              {t.paymentMethod === 'debit' ? 'Tarjeta Débito' : t.paymentMethod === 'transfer' ? 'Transferencia' : 'Efectivo'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className={`font-bold shrink-0 text-right ${isIncome ? "text-emerald-600" : "text-slate-600"}`}>
+                          {isIncome ? "+" : "-"}${t.amount.toLocaleString()}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-slate-100 flex justify-end shrink-0">
+                <button 
+                  onClick={() => setSelectedAuditAccount(null)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-lg transition-colors"
+                >
+                  Entendido
                 </button>
               </div>
             </div>
