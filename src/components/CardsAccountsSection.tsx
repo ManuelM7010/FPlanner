@@ -4,6 +4,7 @@ import {
   HelpCircle, Sparkles, Pencil 
 } from 'lucide-react';
 import { AppState, CreditCard as CardType, DebitCard as AccountType } from '../types';
+import { computeMonthlyAccountBalances } from '../utils/financeUtils';
 
 interface CardsAccountsSectionProps {
   state: AppState;
@@ -23,6 +24,9 @@ export default function CardsAccountsSection({
   onUpdateDebitCardBalance
 }: CardsAccountsSectionProps) {
   const { creditCards, debitCards } = state;
+
+  // Calculamos los saldos mensuales dinámicos de acuerdo con los movimientos
+  const accountFlows = computeMonthlyAccountBalances(debitCards, state.transactions, state.selectedMonth);
 
   // New Credit Card Form State
   const [ccName, setCcName] = useState('');
@@ -73,8 +77,9 @@ export default function CardsAccountsSection({
   };
 
   const startEditingBalance = (card: AccountType) => {
+    const flow = accountFlows[card.id] || { finalBalance: card.balance };
     setEditingCardId(card.id);
-    setEditingBalance(String(card.balance));
+    setEditingBalance(String(flow.finalBalance));
   };
 
   const saveEditingBalance = (id: string) => {
@@ -273,68 +278,84 @@ export default function CardsAccountsSection({
               <p className="text-xs text-slate-400 text-center py-6">No hay cuentas de débito registradas</p>
             ) : (
               <div className="space-y-3">
-                {debitCards.map(account => (
-                  <div key={account.id} className="p-3 bg-slate-50 hover:bg-slate-100/50 rounded-xl border border-slate-100 flex items-center justify-between transition-colors">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="p-2 bg-emerald-150/150 text-emerald-700 rounded-lg bg-emerald-50">
-                        <Wallet className="w-4 h-4" />
+                {debitCards.map(account => {
+                  const flow = accountFlows[account.id] || { initialBalance: account.balance, finalBalance: account.balance, incomes: 0, expenses: 0 };
+                  const netVariance = flow.incomes - flow.expenses;
+                  return (
+                    <div key={account.id} className="p-3 bg-slate-50 hover:bg-slate-100/50 rounded-xl border border-slate-100 flex items-center justify-between transition-colors">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="p-2 bg-emerald-150/150 text-emerald-700 rounded-lg bg-emerald-50">
+                          <Wallet className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-semibold text-slate-700 truncate">{account.name}</h4>
+                          <span className="text-[10px] text-slate-400 font-normal block">Cuenta de Débito / Disponible</span>
+                          
+                          {/* Rollover and flow details */}
+                          <div className="flex items-center gap-1.5 text-[9px] text-slate-400 mt-1 font-medium select-none">
+                            <span>Inicial: <strong className="text-slate-600">${flow.initialBalance.toLocaleString()}</strong></span>
+                            <span>•</span>
+                            <span>Movimiento: <strong className={netVariance >= 0 ? "text-emerald-600" : "text-rose-500"}>
+                              {netVariance >= 0 ? '+' : ''}${netVariance.toLocaleString()}
+                            </strong></span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <h4 className="text-xs font-semibold text-slate-700 truncate">{account.name}</h4>
-                        <span className="text-[10px] text-slate-400 font-normal">Cuenta de Débito / Disponible</span>
+
+                      <div className="flex items-center gap-3">
+                        {editingCardId === account.id ? (
+                          <div className="flex items-center gap-1.5 min-w-[140px]">
+                            <input 
+                              type="number" 
+                              step="0.01"
+                              value={editingBalance}
+                              onChange={(e) => setEditingBalance(e.target.value)}
+                              className="w-18 px-1.5 py-0.5 border border-slate-300 rounded font-bold text-center text-xs text-slate-800"
+                              required
+                            />
+                            <button 
+                              type="button"
+                              onClick={() => saveEditingBalance(account.id)}
+                              className="p-1.5 bg-emerald-600 text-white rounded text-[10px] font-semibold hover:bg-emerald-700"
+                            >
+                              ✓
+                            </button>
+                            <button 
+                              type="button"
+                              onClick={() => setEditingCardId(null)}
+                              className="p-1.5 bg-slate-200 text-slate-650 rounded text-[10px] font-semibold hover:bg-slate-300"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="text-right">
+                            <span className="text-sm font-bold text-emerald-600 block" title="Saldo Final Proyectado para este período">${flow.finalBalance.toLocaleString()}</span>
+                            <button 
+                              onClick={() => startEditingBalance(account)}
+                              className="text-[10px] text-slate-400 hover:text-slate-700 flex items-center gap-0.5 justify-end font-normal ml-auto"
+                            >
+                              <Pencil className="w-2.5 h-2.5" /> Ajustar saldo
+                            </button>
+                          </div>
+                        )}
+
+                        {editingCardId !== account.id && (
+                          <button 
+                            onClick={() => onDeleteDebitCard(account.id)}
+                            className="p-1 px-2 text-rose-500 hover:bg-rose-50 rounded text-[10px] font-medium"
+                            title="Eliminar cuenta"
+                          >
+                            Eliminar
+                          </button>
+                        )}
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-3">
-                      {editingCardId === account.id ? (
-                        <div className="flex items-center gap-1.5 min-w-[140px]">
-                          <input 
-                            type="number" 
-                            step="0.01"
-                            value={editingBalance}
-                            onChange={(e) => setEditingBalance(e.target.value)}
-                            className="w-18 px-1.5 py-0.5 border border-slate-300 rounded font-bold text-center text-xs text-slate-800"
-                            required
-                          />
-                          <button 
-                            type="button"
-                            onClick={() => saveEditingBalance(account.id)}
-                            className="p-1.5 bg-emerald-600 text-white rounded text-[10px] font-semibold hover:bg-emerald-700"
-                          >
-                            ✓
-                          </button>
-                          <button 
-                            type="button"
-                            onClick={() => setEditingCardId(null)}
-                            className="p-1.5 bg-slate-200 text-slate-650 rounded text-[10px] font-semibold hover:bg-slate-300"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="text-right">
-                          <span className="text-sm font-bold text-emerald-600 block">${account.balance.toLocaleString()}</span>
-                          <button 
-                            onClick={() => startEditingBalance(account)}
-                            className="text-[10px] text-slate-400 hover:text-slate-700 flex items-center gap-0.5 justify-end font-normal ml-auto"
-                          >
-                            <Pencil className="w-2.5 h-2.5" /> Ajustar saldo
-                          </button>
-                        </div>
-                      )}
-
-                      {editingCardId !== account.id && (
-                        <button 
-                          onClick={() => onDeleteDebitCard(account.id)}
-                          className="p-1 px-2 text-rose-500 hover:bg-rose-50 rounded text-[10px] font-medium"
-                          title="Eliminar cuenta"
-                        >
-                          Eliminar
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
+                <p className="text-[10px] text-slate-400 text-center font-medium mt-1">
+                  *Los saldos e iniciales se calculan dinámicamente mes a mes según tu período seleccionado.
+                </p>
               </div>
             )}
           </div>

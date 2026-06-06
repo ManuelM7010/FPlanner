@@ -549,10 +549,31 @@ export default function App() {
   };
 
   const handleUpdateDebitCardBalance = (id: string, newBalance: number) => {
-    setState(prev => ({
-      ...prev,
-      debitCards: prev.debitCards.map(d => d.id === id ? { ...d, balance: newBalance } : d)
-    }));
+    setState(prev => {
+      const flows = computeMonthlyAccountBalances(prev.debitCards, prev.transactions, prev.selectedMonth);
+      const flow = flows[id];
+      let diff = 0;
+      if (flow) {
+        diff = newBalance - flow.finalBalance;
+      } else {
+        const found = prev.debitCards.find(d => d.id === id);
+        if (found) {
+          diff = newBalance - found.balance;
+        }
+      }
+
+      const updatedDebitCards = prev.debitCards.map(d => {
+        if (d.id === id) {
+          return { ...d, balance: Number((d.balance + diff).toFixed(2)) };
+        }
+        return d;
+      });
+
+      return {
+        ...prev,
+        debitCards: updatedDebitCards
+      };
+    });
   };
 
   // 5. Category adder

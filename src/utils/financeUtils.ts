@@ -315,12 +315,31 @@ export function computeMonthlyAccountBalances(
 
     // Sum transactions for this month
     transactions.forEach(t => {
-      if (t.month === activeMonthStr && t.cardId) {
-        if (t.paymentMethod === 'debit' || t.paymentMethod === 'transfer' || t.paymentMethod === 'cash') {
-          if (t.type === 'income') {
-            monthIncomes[t.cardId] = (monthIncomes[t.cardId] || 0) + t.amount;
-          } else {
-            monthExpenses[t.cardId] = (monthExpenses[t.cardId] || 0) + t.amount;
+      if (t.month === activeMonthStr) {
+        let cid = t.cardId;
+        if (!cid) {
+          if (t.paymentMethod === 'cash') {
+            const cashAcc = debitCards.find(d => d.id === 'deb-cash-pocket' || d.name.toLowerCase().includes('efectivo') || d.name.toLowerCase().includes('cash'));
+            if (cashAcc) {
+              cid = cashAcc.id;
+            }
+          } else if (t.paymentMethod === 'debit' || t.paymentMethod === 'transfer') {
+            const checkingAcc = debitCards.find(d => d.id !== 'deb-cash-pocket' && !d.name.toLowerCase().includes('efectivo'));
+            if (checkingAcc) {
+              cid = checkingAcc.id;
+            } else if (debitCards.length > 0) {
+              cid = debitCards[0].id;
+            }
+          }
+        }
+
+        if (cid) {
+          if (t.paymentMethod === 'debit' || t.paymentMethod === 'transfer' || t.paymentMethod === 'cash') {
+            if (t.type === 'income') {
+              monthIncomes[cid] = (monthIncomes[cid] || 0) + t.amount;
+            } else {
+              monthExpenses[cid] = (monthExpenses[cid] || 0) + t.amount;
+            }
           }
         }
       }
