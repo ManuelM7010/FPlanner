@@ -34,12 +34,12 @@ export const INITIAL_DEBIT_CARDS: DebitCard[] = [
   {
     id: 'deb-bac-checking',
     name: 'Cuenta Corriente BAC',
-    balance: 3200
+    balance: 0
   },
   {
     id: 'deb-cash-pocket',
     name: 'Efectivo',
-    balance: 450
+    balance: 0
   }
 ];
 

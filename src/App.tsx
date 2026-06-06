@@ -584,6 +584,26 @@ export default function App() {
         }
       }
 
+      if (diff === 0) return prev;
+
+      const dateStr = new Date().toISOString().split('T')[0];
+      const yearMonth = prev.selectedMonth;
+      const dayStr = dateStr.startsWith(yearMonth) ? dateStr.split('-')[2] : '01';
+      const adjustmentDate = `${yearMonth}-${dayStr}`;
+
+      const adjustmentTx: Transaction = {
+        id: `tx-adjust-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        description: 'Ajuste de Saldo',
+        amount: Number(Math.abs(diff).toFixed(2)),
+        type: diff > 0 ? 'income' : 'expense',
+        category: 'cat-other',
+        paymentMethod: id === 'deb-cash-pocket' ? 'cash' : 'transfer',
+        cardId: id,
+        date: adjustmentDate,
+        month: yearMonth,
+        isFixed: false
+      };
+
       const updatedDebitCards = prev.debitCards.map(d => {
         if (d.id === id) {
           return { ...d, balance: Number((d.balance + diff).toFixed(2)) };
@@ -593,7 +613,8 @@ export default function App() {
 
       return {
         ...prev,
-        debitCards: updatedDebitCards
+        debitCards: updatedDebitCards,
+        transactions: [...prev.transactions, adjustmentTx]
       };
     });
   };

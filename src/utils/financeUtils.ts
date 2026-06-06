@@ -296,10 +296,10 @@ export function computeMonthlyAccountBalances(
   const targetYear = parseInt(targetYearStr, 10);
   const targetMonthNum = parseInt(targetMonthStr, 10);
 
-  // Initialize the balances of all cards to their baseline start balances (January 2026)
+  // Initialize the balances of all cards to 0 at the start of original timeline (January 2026)
   const currentBalances: Record<string, number> = {};
   debitCards.forEach(d => {
-    currentBalances[d.id] = d.balance;
+    currentBalances[d.id] = 0;
   });
 
   const flows: Record<string, MonthlyAccountFlow> = {};
