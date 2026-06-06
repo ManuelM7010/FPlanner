@@ -149,7 +149,7 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
   const otherExpenses = otherTxs.reduce((sum, t) => sum + t.amount, 0);
 
   // Account flows for the selectedMonth balance rollover logic
-  const accountFlows = computeMonthlyAccountBalances(debitCards, transactions, selectedMonth);
+  const accountFlows = computeMonthlyAccountBalances(debitCards, transactions, creditCards, installments, selectedMonth);
 
   // Pie chart expenses split by Category
   const categorySplitMap: { [key: string]: { name: string; value: number; color: string } } = {};

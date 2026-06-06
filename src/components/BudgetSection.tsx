@@ -21,10 +21,10 @@ export default function BudgetSection({
   onAddCategory,
   onUpdateTransaction
 }: BudgetSectionProps) {
-  const { transactions, creditCards, debitCards, categories, selectedMonth } = state;
+  const { transactions, creditCards, debitCards, categories, selectedMonth, installments } = state;
 
   // Computar saldos acumulados de cuentas de forma dinámica para el período seleccionado
-  const accountFlows = computeMonthlyAccountBalances(debitCards, transactions, selectedMonth);
+  const accountFlows = computeMonthlyAccountBalances(debitCards, transactions, creditCards, installments, selectedMonth);
 
   // Inline editing states
   const [editingId, setEditingId] = useState<string | null>(null);

@@ -18,8 +18,8 @@ export const INITIAL_CREDIT_CARDS: CreditCard[] = [
     id: 'cc-visa-bac',
     name: 'BAC Visa Infinite',
     limit: 5000,
-    closingDay: 15,
-    dueDay: 5
+    closingDay: 12,
+    dueDay: 6
   },
   {
     id: 'cc-amex',

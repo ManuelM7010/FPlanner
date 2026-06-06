@@ -524,7 +524,7 @@ export default function App() {
 
   const handleUpdateDebitCardBalance = (id: string, newBalance: number) => {
     setState(prev => {
-      const flows = computeMonthlyAccountBalances(prev.debitCards, prev.transactions, prev.selectedMonth);
+      const flows = computeMonthlyAccountBalances(prev.debitCards, prev.transactions, prev.creditCards, prev.installments, prev.selectedMonth);
       const flow = flows[id];
       let diff = 0;
       if (flow) {

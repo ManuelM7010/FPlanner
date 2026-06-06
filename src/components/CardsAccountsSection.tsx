@@ -26,7 +26,7 @@ export default function CardsAccountsSection({
   const { creditCards, debitCards } = state;
 
   // Calculamos los saldos mensuales dinámicos de acuerdo con los movimientos
-  const accountFlows = computeMonthlyAccountBalances(debitCards, state.transactions, state.selectedMonth);
+  const accountFlows = computeMonthlyAccountBalances(debitCards, state.transactions, state.creditCards, state.installments, state.selectedMonth);
 
   // New Credit Card Form State
   const [ccName, setCcName] = useState('');

@@ -155,7 +155,7 @@ export function getBillingPeriodDates(billingMonth: string, closingDay: number):
       'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
       'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
     ];
-    return `${d.getDate()} de ${monthNamesEs[d.getMonth()]}`;
+    return `${d.getDate()} de ${monthNamesEs[d.getMonth()]} de ${d.getFullYear()}`;
   };
 
   return {
@@ -282,6 +282,8 @@ export interface MonthlyAccountFlow {
 export function computeMonthlyAccountBalances(
   debitCards: any[],
   transactions: Transaction[],
+  creditCards: CreditCard[],
+  installments: InstallmentPurchase[],
   targetMonth: string // YYYY-MM
 ): Record<string, MonthlyAccountFlow> {
   const [targetYearStr, targetMonthStr] = targetMonth.split('-');
@@ -342,6 +344,47 @@ export function computeMonthlyAccountBalances(
             }
           }
         }
+      }
+    });
+
+    // 1. Credit Card statement payments due in activeMonthStr
+    // A statement closing in (activeMonthStr - 1 month) is PAID in activeMonthStr.
+    let prevYr = currentYear;
+    let prevM = currentMonth - 1;
+    if (prevM === 0) {
+      prevM = 12;
+      prevYr -= 1;
+    }
+    const prevMStr = `${prevYr}-${String(prevM).padStart(2, '0')}`;
+
+    // For each credit card, compute the statement for prevMStr
+    const prevStatements = computeCardStatementsForMonth(creditCards, transactions, installments, prevMStr);
+    prevStatements.forEach(statement => {
+      if (statement.billingBalance > 0) {
+        // Find checking account or main debit card to deduct this payment from
+        const defCheckingAcc = debitCards.find(d => d.id !== 'deb-cash-pocket' && !d.name.toLowerCase().includes('efectivo')) 
+          || (debitCards.length > 0 ? debitCards[0] : null);
+        
+        if (defCheckingAcc) {
+          monthExpenses[defCheckingAcc.id] = (monthExpenses[defCheckingAcc.id] || 0) + statement.billingBalance;
+        }
+      }
+    });
+
+    // 2. Loans projected payment due in activeMonthStr
+    installments.forEach(inst => {
+      if (inst.type === 'loan') {
+        const projected = getProjectedInstallments(inst);
+        projected.forEach(proj => {
+          if (proj.chargeMonth === activeMonthStr) {
+            const defCheckingAcc = debitCards.find(d => d.id !== 'deb-cash-pocket' && !d.name.toLowerCase().includes('efectivo')) 
+              || (debitCards.length > 0 ? debitCards[0] : null);
+            
+            if (defCheckingAcc) {
+              monthExpenses[defCheckingAcc.id] = (monthExpenses[defCheckingAcc.id] || 0) + proj.monthlyAmount;
+            }
+          }
+        });
       }
     });
 
