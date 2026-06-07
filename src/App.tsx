@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   DollarSign, TrendingUp, TrendingDown, PiggyBank, CreditCard, Wallet, 
   Calendar, Layers, FileText, ChevronLeft, ChevronRight, Download, Upload, 
-  Trash2, Plus, Sparkles, Check, HelpCircle, Shield, Menu, X, Landmark, RefreshCw
+  Trash2, Plus, Sparkles, Check, HelpCircle, Shield, Menu, X, Landmark, RefreshCw,
+  Cloud, CloudOff, Loader2, LogIn, LogOut
 } from 'lucide-react';
 import { AppState, Transaction, InstallmentPurchase, CreditCard as CardType, DebitCard as AccountType, Category, Subscription } from './types';
 import { 
@@ -11,6 +12,10 @@ import {
 } from './data/initialData';
 
 import { getProjectedInstallments, computeMonthlyAccountBalances } from './utils/financeUtils';
+
+// Firebase core integration imports
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { auth, signInWithGoogle, logoutUser, saveUserAppState, getUserAppState } from './firebase';
 
 // Component imports
 import Dashboard from './components/Dashboard';
@@ -92,10 +97,81 @@ export default function App() {
     };
   });
 
-  // Keep state updated inside local cache
+  // Firebase Auth & Cloud Synchronization State
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
+  const [syncing, setSyncing] = useState<boolean>(false);
+  const [lastSyncedTime, setLastSyncedTime] = useState<Date | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const isInitialLoad = useRef<boolean>(true);
+
+  // Monitor Authentication and Load User State from Firestore
+  useEffect(() => {
+    isInitialLoad.current = true;
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        setAuthLoading(true);
+        setSyncError(null);
+        try {
+          const remoteState = await getUserAppState(currentUser.uid);
+          if (remoteState) {
+            // Cloud has data! Download and restore safely
+            setState(prev => ({
+              ...prev,
+              ...remoteState,
+              categories: remoteState.categories || prev.categories,
+              transactions: remoteState.transactions || prev.transactions,
+              creditCards: remoteState.creditCards || prev.creditCards,
+              debitCards: remoteState.debitCards || prev.debitCards,
+              installments: remoteState.installments || prev.installments,
+              subscriptions: remoteState.subscriptions || prev.subscriptions,
+              deletedGeneratedIds: remoteState.deletedGeneratedIds || prev.deletedGeneratedIds,
+              initialBalancesOverrides: remoteState.initialBalancesOverrides || prev.initialBalancesOverrides
+            }));
+            setLastSyncedTime(new Date());
+          } else {
+            // No cloud data yet (new user profile). Upload local state so they don't lose anything!
+            await saveUserAppState(currentUser.uid, state);
+            setLastSyncedTime(new Date());
+          }
+        } catch (err: any) {
+          console.error('Failed to restore from Firestore during login:', err);
+          setSyncError('Error al recuperar datos desde la nube.');
+        } finally {
+          setAuthLoading(false);
+          isInitialLoad.current = false;
+        }
+      } else {
+        setAuthLoading(false);
+        isInitialLoad.current = false;
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Update browser cache on state change, and auto-sync to Cloud (debounced)
   useEffect(() => {
     localStorage.setItem('mz_planner_state', JSON.stringify(state));
-  }, [state]);
+
+    if (!user || authLoading || isInitialLoad.current) return;
+
+    const timer = setTimeout(async () => {
+      setSyncing(true);
+      setSyncError(null);
+      try {
+        await saveUserAppState(user.uid, state);
+        setLastSyncedTime(new Date());
+      } catch (err: any) {
+        console.error('Cloud auto-sync failed:', err);
+        setSyncError('Sincronización de nube fallida.');
+      } finally {
+        setSyncing(false);
+      }
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [state, user, authLoading]);
 
   // Synchronize Subscriptions and Installments -> Proactively auto-populate transactions across ALL configured months
   useEffect(() => {
@@ -833,6 +909,70 @@ export default function App() {
         </div>
       </header>
 
+      {/* Synchronization & Auth Bar */}
+      <div className="bg-slate-800 border-b border-slate-700 py-2.5 px-4 select-none text-xs text-white z-30 font-sans shadow-inner">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+          {/* Status info */}
+          <div className="flex items-center gap-2 flex-wrap justify-center sm:justify-start">
+            {user ? (
+              <>
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <span className="font-semibold text-slate-200">
+                  Sincronizado como <strong className="text-white font-bold">{user.displayName || user.email}</strong>
+                </span>
+                {syncing ? (
+                  <span className="text-[10px] text-slate-400 flex items-center gap-1 shrink-0 font-mono">
+                    <Loader2 className="w-3 h-3 animate-spin text-indigo-400" /> Sincronizando...
+                  </span>
+                ) : lastSyncedTime ? (
+                  <span className="text-[10px] text-emerald-400 flex items-center gap-1 shrink-0 font-mono">
+                    <Cloud className="w-3.5 h-3.5 text-emerald-400" /> Último guardado: {lastSyncedTime.toLocaleTimeString()}
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-emerald-400 flex items-center gap-1 shrink-0 font-mono">
+                    <Cloud className="w-3.5 h-3.5 text-emerald-400" /> Guardado en la nube
+                  </span>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                <span className="font-medium text-slate-300 flex items-center gap-1.5 shrink-0">
+                  <CloudOff className="w-3.5 h-3.5 text-amber-405 text-amber-400" /> Modo Local (No Sincronizado)
+                </span>
+                <span className="text-[10px] text-slate-400 hidden lg:inline">
+                  &bull; ¡Inicia sesión con Google para proteger tus registros y compartirlos entre tu teléfono y PC!
+                </span>
+              </>
+            )}
+            {syncError && <span className="text-rose-450 text-[10px] font-bold shrink-0">⚠️ {syncError}</span>}
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-2 shrink-0">
+            {authLoading ? (
+              <span className="text-xs text-slate-400 flex items-center gap-1">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" /> Verificando...
+              </span>
+            ) : user ? (
+              <button
+                onClick={logoutUser}
+                className="px-2.5 py-1 rounded bg-slate-700 hover:bg-slate-650 text-slate-200 hover:text-white transition-all font-bold flex items-center gap-1 border border-slate-600 cursor-pointer text-[11px]"
+              >
+                <LogOut className="w-3 h-3" /> Cerrar Sesión
+              </button>
+            ) : (
+              <button
+                onClick={signInWithGoogle}
+                className="px-3 py-1 rounded bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold flex items-center gap-1.5 shadow-sm hover:shadow transition-all border border-emerald-500/30 cursor-pointer text-[11px] uppercase tracking-wide"
+              >
+                <LogIn className="w-3.5 h-3.5" /> Sincronizar con Google
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Month selections slider block - "Y en pestañas mes a mes." */}
       <div className="bg-slate-850 text-white py-1.5 px-4 border-b border-slate-800 font-medium text-xs select-none shadow-inner z-20 shrink-0">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -908,10 +1048,12 @@ export default function App() {
         
         {/* Navigation Sidebar Drawer */}
         <aside className={`${mobileMenuOpen ? 'flex translate-x-0' : 'hidden md:flex'} flex-col gap-1.5 w-full md:w-60 bg-white md:bg-transparent p-4 md:p-0 rounded-xl border border-slate-100 md:border-0 fixed md:static inset-x-4 top-36 shadow-lg md:shadow-none z-30 transition-transform flex-shrink-0 select-none`}>
-          <div className="p-3.5 bg-slate-900 text-white rounded-xl mb-4 text-xs font-medium space-y-1">
-            <span className="text-[10px] uppercase text-slate-400 tracking-wider font-semibold block">Periodo de Trabajo</span>
-            <span className="text-sm font-bold text-white block">{getSelectedMonthName()}</span>
-            <span className="text-[9px] text-slate-400 font-mono block">Financial Planner MZ Engine</span>
+          <div className="p-3 bg-slate-900 text-white rounded-xl mb-4 text-xs font-medium flex items-center gap-3">
+            <img src="/icon.svg" className="w-9 h-9 rounded-lg border border-slate-800 shrink-0" alt="MZ Planner Icon" referrerPolicy="no-referrer" />
+            <div className="space-y-0.5">
+              <span className="text-[10px] uppercase text-indigo-400 tracking-wider font-bold block">Periodo de Trabajo</span>
+              <span className="text-sm font-bold text-white block">{getSelectedMonthName()}</span>
+            </div>
           </div>
 
           <span className="text-[9px] font-bold uppercase text-slate-400 tracking-widest px-2 block mt-1 pb-1 border-b border-slate-100 mb-1">Módulos MZ</span>
@@ -1040,11 +1182,25 @@ export default function App() {
             </button>
           </div>
 
-          <div className="p-3 bg-slate-50 border border-slate-100 text-slate-500 rounded-lg text-[10px] leading-relaxed select-none hidden md:block">
-            <div className="flex items-center gap-1 font-bold text-slate-700">
-              <Shield className="w-3.5 h-3.5 text-blue-500" /> Seguridad Local
+          <div className="p-3 bg-gradient-to-br from-slate-50 to-indigo-50/20 border border-slate-100 text-slate-500 rounded-lg text-[10px] leading-relaxed select-none hidden md:block">
+            <div className="flex items-center gap-1.5 font-bold text-slate-700">
+              {user ? (
+                <>
+                  <Cloud className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>Respaldo de Nube Activo</span>
+                </>
+              ) : (
+                <>
+                  <Shield className="w-3.5 h-3.5 text-blue-500" />
+                  <span>Seguridad Local</span>
+                </>
+              )}
             </div>
-            <p className="mt-1 font-medium">Sus datos se guardan estrictamente en su navegador. No se envía información financiera a servidores externos.</p>
+            <p className="mt-1 font-medium leading-normal">
+              {user 
+                ? "Tus datos financieros están protegidos en la nube de Firebase, quedando asegurados ante cualquier reinicio del servidor o cambio de dispositivo."
+                : "Tus datos se guardan temporalmente en tu navegador. Inicia sesión con tu cuenta de Google arriba para proteger tus registros en la nube."}
+            </p>
           </div>
         </aside>
 

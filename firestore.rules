@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 3. Path Variable & Format Hardening Node
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+    
+    function isSignedIn() { 
+      return request.auth != null; 
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Verified users only (Adheres strictly to Verified Users Critical Constraint)
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    // 2. Validation Blueprints (Anti-Update-Gap & Denial of Wallet Guard)
+    function isValidUserAppState(data, userId) {
+      return data.userId == userId
+        && data.userId == request.auth.uid
+        && data.updatedAt == request.time
+        && (!('selectedMonth' in data) || (data.selectedMonth is string && data.selectedMonth.size() <= 10))
+        && (!('transactions' in data) || (data.transactions is string && data.transactions.size() <= 1048576))
+        && (!('creditCards' in data) || (data.creditCards is string && data.creditCards.size() <= 65536))
+        && (!('debitCards' in data) || (data.debitCards is string && data.debitCards.size() <= 65536))
+        && (!('installments' in data) || (data.installments is string && data.installments.size() <= 65536))
+        && (!('categories' in data) || (data.categories is string && data.categories.size() <= 65536))
+        && (!('subscriptions' in data) || (data.subscriptions is string && data.subscriptions.size() <= 65536))
+        && (!('deletedGeneratedIds' in data) || (data.deletedGeneratedIds is string && data.deletedGeneratedIds.size() <= 65536))
+        && (!('initialBalancesOverrides' in data) || (data.initialBalancesOverrides is string && data.initialBalancesOverrides.size() <= 65536));
+    }
+
+    // Fortress Secure Path for userStates
+    match /userStates/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false; // List queries disabled for safety; only single document get is allowed
+
+      allow create: if isOwner(userId) 
+                    && isVerifiedUser() 
+                    && isValidId(userId) 
+                    && isValidUserAppState(request.resource.data, userId);
+
+      allow update: if isOwner(userId) 
+                    && isVerifiedUser() 
+                    && isValidId(userId) 
+                    && isValidUserAppState(request.resource.data, userId)
+                    && request.resource.data.userId == resource.data.userId; // 12. Immortal Field Rule (UserId is immutable)
+
+      allow delete: if isOwner(userId);
+    }
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "entities": {
+    "UserAppState": {
+      "title": "UserAppState",
+      "description": "The complete financial state of a user containing transactions, cards, and budgets.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The Firebase Authentication UID of the owner."
+        },
+        "selectedMonth": {
+          "type": "string",
+          "description": "Currently selected YYYY-MM planning month."
+        },
+        "transactions": {
+          "type": "string",
+          "description": "JSON stringified list of user transactions."
+        },
+        "creditCards": {
+          "type": "string",
+          "description": "JSON stringified list of credit cards."
+        },
+        "debitCards": {
+          "type": "string",
+          "description": "JSON stringified list of debit cards."
+        },
+        "installments": {
+          "type": "string",
+          "description": "JSON stringified list of installment purchases."
+        },
+        "categories": {
+          "type": "string",
+          "description": "JSON stringified list of budgeting categories."
+        },
+        "subscriptions": {
+          "type": "string",
+          "description": "JSON stringified list of subscriptions."
+        },
+        "deletedGeneratedIds": {
+          "type": "string",
+          "description": "JSON stringified list of deleted automatic transaction IDs."
+        },
+        "initialBalancesOverrides": {
+          "type": "string",
+          "description": "JSON stringified map of initial balance overrides."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The server-validated timestamp of the last write."
+        }
+      },
+      "required": ["userId", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/userStates/{userId}": {
+      "schema": "UserAppState",
+      "description": "A single comprehensive state document for each user to enable instant real-time synchronization between devices without query latency."
+    }
+  }
+}
