@@ -103,7 +103,35 @@ export default function App() {
   const [syncing, setSyncing] = useState<boolean>(false);
   const [lastSyncedTime, setLastSyncedTime] = useState<Date | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [showAuthHelpModal, setShowAuthHelpModal] = useState<boolean>(false);
+  const [loginErrorDetail, setLoginErrorDetail] = useState<string | null>(null);
   const isInitialLoad = useRef<boolean>(true);
+
+  // Authenticate with Google with cross-origin iframe handling
+  const handleSignInGoogle = async () => {
+    setSyncError(null);
+    setLoginErrorDetail(null);
+    const isInsideIframe = window.self !== window.top;
+    
+    try {
+      await signInWithGoogle();
+    } catch (err: any) {
+      console.error('Google Sign In Error in component:', err);
+      let errorMsg = 'Error al iniciar sesión.';
+      if (err?.code === 'auth/popup-blocked') {
+        errorMsg = 'Tu navegador bloqueó la ventana emergente de Google. Por favor, permite ventanas emergentes.';
+      } else if (err?.code === 'auth/cancelled-popup-request' || err?.message?.includes('cancelled')) {
+        errorMsg = 'Inicio de sesión cancelado o interrumpido.';
+      } else if (err?.code === 'auth/network-request-failed') {
+        errorMsg = 'Error de red. Verifica tu conexión a internet.';
+      } else if (isInsideIframe) {
+        errorMsg = 'Los navegadores bloquean la autenticación dentro del entorno iframe de desarrollo.';
+      }
+      setLoginErrorDetail(err?.message || String(err));
+      setSyncError(errorMsg);
+      setShowAuthHelpModal(true);
+    }
+  };
 
   // Monitor Authentication and Load User State from Firestore
   useEffect(() => {
@@ -949,7 +977,7 @@ export default function App() {
           </div>
 
           {/* Action buttons */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2.5 shrink-0">
             {authLoading ? (
               <span className="text-xs text-slate-400 flex items-center gap-1">
                 <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" /> Verificando...
@@ -962,12 +990,20 @@ export default function App() {
                 <LogOut className="w-3 h-3" /> Cerrar Sesión
               </button>
             ) : (
-              <button
-                onClick={signInWithGoogle}
-                className="px-3 py-1 rounded bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold flex items-center gap-1.5 shadow-sm hover:shadow transition-all border border-emerald-500/30 cursor-pointer text-[11px] uppercase tracking-wide"
-              >
-                <LogIn className="w-3.5 h-3.5" /> Sincronizar con Google
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowAuthHelpModal(true)}
+                  className="text-[10px] text-slate-400 hover:text-indigo-300 font-medium underline cursor-pointer pr-1"
+                >
+                  ¿Problemas para entrar?
+                </button>
+                <button
+                  onClick={handleSignInGoogle}
+                  className="px-3 py-1 rounded bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold flex items-center gap-1.5 shadow-sm hover:shadow transition-all border border-emerald-500/30 cursor-pointer text-[11px] uppercase tracking-wide"
+                >
+                  <LogIn className="w-3.5 h-3.5" /> Sincronizar con Google
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -1210,6 +1246,84 @@ export default function App() {
         </main>
 
       </div>
+
+      {showAuthHelpModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl relative animate-in fade-in duration-200">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-950 px-6 py-4 border-b border-slate-700/60 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <HelpCircle className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-white font-bold text-sm tracking-tight">Soporte de Autenticación y Sincronización</h3>
+              </div>
+              <button 
+                onClick={() => setShowAuthHelpModal(false)}
+                className="text-slate-400 hover:text-white transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4 text-slate-300 text-xs select-text">
+              <p className="font-semibold text-white text-[13px]">
+                ¿Por qué no me deja iniciar sesión directamente aquí?
+              </p>
+              
+              <p className="leading-relaxed text-slate-300">
+                La vista previa de Google AI Studio se ejecuta dentro de un <strong className="text-indigo-300">cuadro aislado (iframe)</strong>. Por tu seguridad, los navegadores modernos como Google Chrome, Safari y Edge bloquean la comunicación de cookies de terceros y el almacenamiento dentro de estos cuadros. Esto impide que el popup de Google complete la conexión en esta pantallita.
+              </p>
+
+              <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-3 shadow-inner">
+                <h4 className="font-bold text-[11px] uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 font-sans">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Solución en 2 simples pasos:
+                </h4>
+                <ol className="list-decimal pl-4 space-y-2 leading-relaxed">
+                  <li>
+                    Abre la aplicación en una pestaña propia haciendo clic en el botón de abajo (<strong className="text-white">Abrir en Nueva Pestaña 🚀</strong>) o usando el botón de abrir (↗️) en la esquina superior derecha de la vista previa de AI Studio.
+                  </li>
+                  <li>
+                    En la nueva pestaña, haz clic en el botón <strong className="text-emerald-400">Sincronizar con Google</strong> e inicia sesión de forma segura.
+                  </li>
+                </ol>
+              </div>
+
+              <p className="leading-relaxed text-[11px] text-slate-400">
+                Una vez iniciada tu sesión en la pestaña independiente, podrás usar la aplicación indistintamente desde tu celular como un acceso directo (short cut) o tu computadora, ¡y todos tus registros se mantendrán sincronizados en tiempo real y a salvo de reinicios de servidores!
+              </p>
+
+              {loginErrorDetail && (
+                <div className="mt-3">
+                  <details className="text-[10px] text-slate-500 font-mono bg-slate-950 p-2.5 rounded-lg border border-slate-800 select-all">
+                    <summary className="cursor-pointer font-bold text-[10px] text-slate-400 outline-none select-none">Detalles técnicos del error (Debug)</summary>
+                    <p className="mt-1.5 overflow-x-auto whitespace-pre-wrap">{loginErrorDetail}</p>
+                  </details>
+                </div>
+              )}
+            </div>
+
+            {/* Actions Footer */}
+            <div className="bg-slate-950 px-6 py-4 border-t border-slate-850 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <button
+                onClick={() => setShowAuthHelpModal(false)}
+                className="w-full sm:w-auto px-4 py-2 text-slate-400 hover:text-white font-semibold transition-all text-center cursor-pointer order-last sm:order-first text-[11px]"
+              >
+                Cerrar Ayuda
+              </button>
+              
+              <button
+                onClick={() => {
+                  window.open(window.location.origin, '_blank');
+                  setShowAuthHelpModal(false);
+                }}
+                className="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-extrabold rounded-xl transition-all shadow-md hover:shadow-indigo-500/20 hover:scale-[1.02] flex items-center justify-center gap-1.5 text-[11px] uppercase tracking-wider cursor-pointer"
+              >
+                <span>Abrir en Nueva Pestaña 🚀</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Humble aesthetic page footer */}
       <footer className="bg-slate-900 border-t border-slate-800 text-slate-500 text-center py-4 select-none mt-auto text-[11px] font-semibold shrink-0">
