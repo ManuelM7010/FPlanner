@@ -8,21 +8,39 @@ import {
   AlertCircle, ChevronRight, Briefcase, Sparkles, Home, Calendar, Info, X, Eye,
   Coins, Pencil, Check
 } from 'lucide-react';
-import { AppState, Transaction, InstallmentPurchase } from '../types';
+import { AppState, Transaction, InstallmentPurchase, CreditCard as CardType } from '../types';
 import { getProjectedInstallments, computeCardStatementsForMonth, computeMonthlyAccountBalances } from '../utils/financeUtils';
 
 interface DashboardProps {
   state: AppState;
   onNavigate: (section: string) => void;
   onUpdateDebitCardInitialBalance?: (id: string, month: string, newInitialBalance: number) => void;
+  onUpdateCreditCard?: (id: string, updated: Partial<CardType>) => void;
 }
 
-export default function Dashboard({ state, onNavigate, onUpdateDebitCardInitialBalance }: DashboardProps) {
+export default function Dashboard({ state, onNavigate, onUpdateDebitCardInitialBalance, onUpdateCreditCard }: DashboardProps) {
   const { transactions, creditCards, debitCards, installments, categories, selectedMonth } = state;
 
   const [viewType, setViewType] = React.useState<'monthly' | 'cumulative'>('monthly');
   const [selectedKpi, setSelectedKpi] = React.useState<'incomes' | 'projected_expenses' | 'outflows' | 'savings' | null>(null);
   const [selectedCardDetail, setSelectedCardDetail] = React.useState<{ cardId: string; billingMonth: string; cardName: string } | null>(null);
+  const [customClosingDay, setCustomClosingDay] = React.useState<string>('');
+  const [customDueDay, setCustomDueDay] = React.useState<string>('');
+
+  React.useEffect(() => {
+    if (selectedCardDetail) {
+      const card = creditCards.find(c => c.id === selectedCardDetail.cardId);
+      if (card) {
+        const override = card.overrides?.[selectedCardDetail.billingMonth];
+        setCustomClosingDay(String(override?.closingDay ?? card.closingDay));
+        setCustomDueDay(String(override?.dueDay ?? card.dueDay));
+      }
+    } else {
+      setCustomClosingDay('');
+      setCustomDueDay('');
+    }
+  }, [selectedCardDetail, creditCards]);
+
   const [selectedAuditAccount, setSelectedAuditAccount] = React.useState<any | null>(null);
 
   const [editingInitialCardId, setEditingInitialCardId] = React.useState<string | null>(null);
@@ -161,8 +179,8 @@ export default function Dashboard({ state, onNavigate, onUpdateDebitCardInitialB
     .filter(t => activePeriodMonths.includes(t.month) && t.type === 'expense')
     .reduce((sum, t) => sum + t.amount, 0);
 
-  const projectedSavings = monthlyIncomes - totalProjectedExpenses;
-  const projectedSavingsRate = monthlyIncomes > 0 ? (projectedSavings / monthlyIncomes) * 100 : 0;
+  const projectedSavings = monthlyIncomes - totalOutflows;
+  const projectedSavingsRate = monthlyIncomes > 0 ? (projectedSavings / monthlyIncomes) * 100 : 0; // We keep rate aligned with the corrected formula
 
   // Classification for breakdown lists
   const activeExpenses = transactions.filter(t => activePeriodMonths.includes(t.month) && t.type === 'expense');
@@ -210,10 +228,9 @@ export default function Dashboard({ state, onNavigate, onUpdateDebitCardInitialB
     return sum + (flow ? flow.initialBalance : d.balance);
   }, 0);
 
-  const totalFinalCashBalance = debitCards.reduce((sum, d) => {
-    const flow = finalAccountFlows[d.id];
-    return sum + (flow ? flow.finalBalance : d.balance);
-  }, 0);
+  // En cumplimiento con tu instrucción, el efectivo final proyectado es la suma estricta y sin excepciones de:
+  // Saldo Inicial + Ingresos Planificados - Egresos Reales de este período.
+  const totalFinalCashBalance = totalInitialCashBalance + monthlyIncomes - totalOutflows;
 
   // Pie chart expenses split by Category
   const categorySplitMap: { [key: string]: { name: string; value: number; color: string } } = {};
@@ -831,6 +848,174 @@ export default function Dashboard({ state, onNavigate, onUpdateDebitCardInitialB
                 </div>
               );
             })}
+          </div>
+        </div>
+      </div>
+
+      {/* SECCIÓN ANALÍTICA DE SALUD FINANCIERA (KPIS & METAS) */}
+      <div className="bg-slate-900 text-white rounded-xl p-5 border border-slate-800 shadow-md">
+        <div className="flex items-center justify-between pb-3.5 border-b border-slate-800 mb-4">
+          <div>
+            <h3 className="text-xs font-bold uppercase tracking-widest text-indigo-400 flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+              <span>Diagnóstico Analítico de Salud Financiera - MZ Planner</span>
+            </h3>
+            <p className="text-[10px] text-slate-400 mt-0.5">Control de apalancamiento, eficiencia de liquidez y desvío de presupuesto para {monthLabel}</p>
+          </div>
+          <span className="text-[9px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded">
+            CALCULADO EN TIEMPO REAL
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {/* Card 1: Eficiencia y Ahorro */}
+          <div className="bg-slate-950 p-4 rounded-xl border border-slate-850 flex flex-col justify-between">
+            <div>
+              <div className="flex justify-between items-start mb-2">
+                <span className="text-[11px] font-bold uppercase text-slate-400 tracking-wide">Eficiencia de Ahorro</span>
+                {(() => {
+                  if (projectedSavingsRate >= 20) return <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[9px] font-bold px-1.5 py-0.5 rounded">Excelente (≥20%)</span>;
+                  if (projectedSavingsRate >= 10) return <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 text-[9px] font-bold px-1.5 py-0.5 rounded">Saludable (10-20%)</span>;
+                  if (projectedSavingsRate > 0) return <span className="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[9px] font-bold px-1.5 py-0.5 rounded">Ajustado (&lt;10%)</span>;
+                  return <span className="bg-rose-500/20 text-rose-400 border border-rose-500/30 text-[9px] font-bold px-1.5 py-0.5 rounded">Déficit (&lt;0%)</span>;
+                })()}
+              </div>
+
+              <div className="flex items-baseline gap-1 mt-1">
+                <span className="text-2xl font-bold font-mono tracking-tight text-slate-100">{projectedSavingsRate.toFixed(1)}%</span>
+                <span className="text-[10px] text-slate-400">acumulado</span>
+              </div>
+              
+              <div className="mt-3 space-y-1.5 text-[11px] text-slate-350">
+                <div className="w-full bg-slate-850 rounded-full h-2 overflow-hidden">
+                  <div 
+                    className={`h-full transition-all duration-300 ${
+                      projectedSavingsRate >= 20 ? 'bg-emerald-500' : 
+                      projectedSavingsRate >= 10 ? 'bg-blue-500' : 
+                      projectedSavingsRate > 0 ? 'bg-amber-500' : 'bg-rose-500'
+                    }`}
+                    style={{ width: `${Math.min(100, Math.max(0, projectedSavingsRate))}%` }}
+                  />
+                </div>
+                <p className="text-[10px] text-slate-450 leading-relaxed pt-1.5">
+                  Destinas <span className="text-indigo-400 font-semibold">${projectedSavings.toLocaleString()}</span> de tus ingresos al fondo de ahorro neto. {projectedSavingsRate < 10 && 'Considera disminuir gastos ordinarios flexibles este mes para aumentar tu ratio financiero.'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: spend & leverage values */}
+          <div className="bg-slate-950 p-4 rounded-xl border border-slate-850 flex flex-col justify-between">
+            <div>
+              <div className="flex justify-between items-start mb-2">
+                <span className="text-[11px] font-bold uppercase text-slate-400 tracking-wide">Ritmo de Gasto Diario</span>
+                <span className="text-indigo-400 bg-indigo-500/10 text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                  <Coins className="w-3 h-3" /> Promedio
+                </span>
+              </div>
+              
+              <div className="flex items-baseline gap-1 mt-1">
+                <span className="text-2xl font-bold font-mono tracking-tight text-slate-100">
+                  ${(() => {
+                    const days = (() => {
+                      const [yNum, mNum] = selectedMonth.split('-');
+                      return new Date(parseInt(yNum, 10), parseInt(mNum, 10), 0).getDate();
+                    })();
+                    return (totalOutflows / days).toFixed(2);
+                  })()}
+                </span>
+                <span className="text-[10px] text-slate-400">/ día</span>
+              </div>
+
+              {/* CC leverage block */}
+              {(() => {
+                const totalLimit = creditCards.reduce((sum, c) => sum + c.limit, 0);
+                const summaries = computeCardStatementsForMonth(creditCards, transactions, installments, selectedMonth);
+                const totalDue = summaries.reduce((sum, s) => sum + s.billingBalance, 0);
+                const leveragePct = totalLimit > 0 ? (totalDue / totalLimit) * 100 : 0;
+
+                return (
+                  <div className="mt-4 pt-3.5 border-t border-slate-850 space-y-1.5">
+                    <div className="flex justify-between text-[10px] text-slate-400">
+                      <span>Uso Global de Tarjetas (Deuda / Límite)</span>
+                      <span className={`font-mono font-bold ${leveragePct > 50 ? 'text-rose-400' : leveragePct > 30 ? 'text-amber-400' : 'text-slate-400'}`}>
+                        {leveragePct.toFixed(0)}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-850 rounded-full h-1.5 overflow-hidden">
+                      <div 
+                        className={`h-full transition-all duration-300 ${leveragePct > 50 ? 'bg-rose-500' : leveragePct > 30 ? 'bg-amber-500' : 'bg-indigo-500'}`}
+                        style={{ width: `${Math.min(100, leveragePct)}%` }}
+                      />
+                    </div>
+                    <span className="text-[9.5px] text-slate-500 block leading-tight">
+                      {totalLimit > 0 
+                        ? `Límite Total: $${totalLimit.toLocaleString()} (Deuda actual corte: $${totalDue.toLocaleString()}).` 
+                        : 'No tienes límites de crédito registrados en base de tarjetas.'}
+                    </span>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+
+          {/* Card 3: 50/30/20 budget framework audit */}
+          <div className="bg-slate-950 p-4 rounded-xl border border-slate-850 flex flex-col justify-between">
+            <div className="space-y-3">
+              <span className="text-[11px] font-bold uppercase text-slate-400 tracking-wide block">Auditoría Presupuesto: Ley 50 / 30 / 20</span>
+              
+              {(() => {
+                const essentialAmt = housingExpenses + installmentsExpenses;
+                const variablesAmt = otherExpenses + subscriptionExpenses;
+                const savingsAmt = projectedSavings > 0 ? projectedSavings : 0;
+                
+                const totalFramework = essentialAmt + variablesAmt + savingsAmt;
+                const actEssentialPct = totalFramework > 0 ? (essentialAmt / totalFramework) * 100 : 0;
+                const actFlexPct = totalFramework > 0 ? (variablesAmt / totalFramework) * 100 : 0;
+                const actSavPct = totalFramework > 0 ? (savingsAmt / totalFramework) * 100 : 0;
+
+                return (
+                  <div className="space-y-2.5 text-[10px] font-medium text-slate-350">
+                    {/* Fixed / Essentials */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-[10.5px]">
+                        <span className="text-slate-400">Esenciales (Fijos + Deudas) <strong className="text-slate-200">({actEssentialPct.toFixed(0)}%)</strong></span>
+                        <span className="font-semibold text-slate-450">Meta: ≤50%</span>
+                      </div>
+                      <div className="w-full bg-slate-850 h-1.5 rounded-full overflow-hidden">
+                        <div className="h-full bg-indigo-500" style={{ width: `${Math.min(100, actEssentialPct)}%` }} />
+                      </div>
+                    </div>
+
+                    {/* Flexible / Lifestyle */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-[10.5px]">
+                        <span className="text-slate-400">Flexibles (Deseos/Hogar) <strong className="text-slate-200">({actFlexPct.toFixed(0)}%)</strong></span>
+                        <span className="font-semibold text-slate-450">Meta: ≤30%</span>
+                      </div>
+                      <div className="w-full bg-slate-850 h-1.5 rounded-full overflow-hidden">
+                        <div className="h-full bg-amber-500" style={{ width: `${Math.min(100, actFlexPct)}%` }} />
+                      </div>
+                    </div>
+
+                    {/* Savings */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-[10.5px]">
+                        <span className="text-slate-400">Ahorro Proyectado <strong className="text-slate-200">({actSavPct.toFixed(0)}%)</strong></span>
+                        <span className="font-semibold text-slate-450">Meta: ≥20%</span>
+                      </div>
+                      <div className="w-full bg-slate-850 h-1.5 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500" style={{ width: `${Math.min(100, actSavPct)}%` }} />
+                      </div>
+                    </div>
+
+                    <div className="text-[9px] pt-1 border-t border-slate-900 text-slate-450 leading-tight">
+                      {actEssentialPct > 55 ? '⚠️ Tus obligaciones esenciales exigen más del 50%. Intenta contener cuotas.' : '✅ Buen balance en gastos esenciales fijos.'}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
           </div>
         </div>
       </div>
@@ -1497,17 +1682,80 @@ export default function Dashboard({ state, onNavigate, onUpdateDebitCardInitialB
                 </button>
               </div>
 
-              {/* Explanatory banner */}
-              <div className="mb-4 p-3 bg-blue-50/50 rounded-lg text-blue-800 leading-normal shrink-0">
-                <span className="font-semibold">Período de Facturación que se paga en {monthLabel}: </span>
-                {stmt ? (
-                  <>
-                    <strong className="font-semibold text-slate-800 mr-1 pr-1">{displayBillingPeriod}</strong> 
-                    (Corte al <span className="font-semibold text-slate-800">{stmt.closingDateStr}</span>, límite de pago el <span className="font-bold text-indigo-700">{stmt.paymentDueDateStr}</span>)
-                  </>
-                ) : (
-                  <strong>{displayBillingPeriod}</strong>
-                )}
+              {/* Explanatory banner with editable dates */}
+              <div className="mb-4 p-3.5 bg-blue-50/60 rounded-xl border border-blue-100 text-blue-900 shrink-0 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  <div>
+                    <span className="font-semibold text-slate-800 block">Período de Facturación que se paga en {monthLabel}: </span>
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      Estado de cuenta de <strong className="text-slate-800 font-semibold">{displayBillingPeriod}</strong>
+                    </span>
+                  </div>
+                  {stmt && (
+                    <div className="bg-white/80 p-1.5 px-3 rounded-lg border border-blue-200 text-[11px] text-slate-700 select-none">
+                      Corte real: <strong className="text-slate-950 font-semibold">{stmt.closingDateStr}</strong> | Límite: <strong className="text-indigo-700 font-bold">{stmt.paymentDueDateStr}</strong>
+                    </div>
+                  )}
+                </div>
+
+                {/* Date quick override form */}
+                <div className="pt-2 border-t border-blue-100/60 flex flex-wrap items-center gap-4 text-xs font-semibold text-slate-705">
+                  <span className="text-[10px] text-blue-800 flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                    <span>¿El banco movió las fechas de este mes? Cambiarlas aquí:</span>
+                  </span>
+                  
+                  <div className="flex items-center gap-1.5">
+                    <label htmlFor="modal-over-c" className="text-[10px] text-slate-500 font-normal">Corte (Día):</label>
+                    <input 
+                      id="modal-over-c"
+                      type="number"
+                      min="1"
+                      max="31"
+                      value={customClosingDay}
+                      onChange={(e) => setCustomClosingDay(e.target.value)}
+                      className="w-12 px-1.5 py-1 bg-white border border-slate-200 rounded text-center text-slate-850 font-sans text-xs"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <label htmlFor="modal-over-d" className="text-[10px] text-slate-500 font-normal">Pago (Día):</label>
+                    <input 
+                      id="modal-over-d"
+                      type="number"
+                      min="1"
+                      max="31"
+                      value={customDueDay}
+                      onChange={(e) => setCustomDueDay(e.target.value)}
+                      className="w-12 px-1.5 py-1 bg-white border border-slate-200 rounded text-center text-slate-850 font-sans text-xs"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cDay = parseInt(customClosingDay, 10);
+                      const dDay = parseInt(customDueDay, 10);
+                      if (isNaN(cDay) || isNaN(dDay) || cDay < 1 || cDay > 31 || dDay < 1 || dDay > 31) {
+                        alert('Por favor ingresa un día de corte y pago válido entre 1 y 31.');
+                        return;
+                      }
+
+                      const card = creditCards.find(c => c.id === selectedCardDetail.cardId);
+                      if (card && onUpdateCreditCard) {
+                        const nextOverrides = {
+                          ...(card.overrides || {}),
+                          [selectedCardDetail.billingMonth]: { closingDay: cDay, dueDay: dDay }
+                        };
+                        onUpdateCreditCard(card.id, { overrides: nextOverrides });
+                        alert(`¡Fechas de pago actualizadas para el corte de ${displayBillingPeriod}! Alertas y calendarios sincronizados.`);
+                      }
+                    }}
+                    className="p-1 px-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded transiton-colors cursor-pointer text-[10px]"
+                  >
+                    Guardar Fechas del Mes
+                  </button>
+                </div>
               </div>
 
               {/* Scrollable table details */}

@@ -56,6 +56,44 @@ export function getCardCycle(dateStr: string, closingDay: number, dueDay: number
   };
 }
 
+/**
+ * Calculates statement closing with potential overrides for a specific card and transaction date.
+ */
+export function getCardCycleForCard(card: CreditCard, dateStr: string): CardCycleInfo {
+  const parts = dateStr.split('-');
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10); // 1-indexed
+  const day = parseInt(parts[2], 10);
+
+  // Determine current transaction month override
+  const currentMonthStr = `${year}-${String(month).padStart(2, '0')}`;
+  const overrideCurrent = card.overrides?.[currentMonthStr];
+  const estClosingDay = overrideCurrent?.closingDay ?? card.closingDay;
+
+  let finalClosingDay = card.closingDay;
+  let finalDueDay = card.dueDay;
+
+  if (day > estClosingDay) {
+    // Flows into following month's cycle
+    let targetMonth = month + 1;
+    let targetYear = year;
+    if (targetMonth > 12) {
+      targetMonth = 1;
+      targetYear += 1;
+    }
+    const nextMonthStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}`;
+    const overrideNext = card.overrides?.[nextMonthStr];
+    finalClosingDay = overrideNext?.closingDay ?? card.closingDay;
+    finalDueDay = overrideNext?.dueDay ?? card.dueDay;
+  } else {
+    // Remains in current month's cycle
+    finalClosingDay = estClosingDay;
+    finalDueDay = overrideCurrent?.dueDay ?? card.dueDay;
+  }
+
+  return getCardCycle(dateStr, finalClosingDay, finalDueDay);
+}
+
 export interface ProjectedInstallment {
   installmentId: string;
   installmentIndex: number; // 1-based index (e.g. 1 of 12)
@@ -202,11 +240,15 @@ export function computeCardStatementsForMonth(
   const targetMonth = parseInt(targetParts[1], 10); // 1-indexed
 
   cards.forEach(card => {
-    // Determine closing date of this card in targetMonth
-    const closingDateStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(card.closingDay).padStart(2, '0')}`;
+    // Determine closing config of this card in targetMonth
+    const override = card.overrides?.[targetBillingMonth];
+    const closingDayVal = override?.closingDay ?? card.closingDay;
+    const dueDayVal = override?.dueDay ?? card.dueDay;
+
+    const closingDateStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(closingDayVal).padStart(2, '0')}`;
     
     // Find due date corresponding to this closing cycle
-    const cycleInfo = getCardCycle(closingDateStr, card.closingDay, card.dueDay);
+    const cycleInfo = getCardCycle(closingDateStr, closingDayVal, dueDayVal);
 
     const detailedCharges: CardStatementSummary['detailedCharges'] = [];
     let billingBalance = 0;
@@ -216,7 +258,7 @@ export function computeCardStatementsForMonth(
       if (t.paymentMethod === 'credit' && t.cardId === card.id && !t.installmentId) {
         // Enforce 2026 baseline constraint
         if (t.date >= '2026-01-01') {
-          const tCycle = getCardCycle(t.date, card.closingDay, card.dueDay);
+          const tCycle = getCardCycleForCard(card, t.date);
           // If it closes in the targetBillingMonth
           if (tCycle.billingMonth === targetBillingMonth) {
             detailedCharges.push({
@@ -239,7 +281,7 @@ export function computeCardStatementsForMonth(
         projected.forEach(proj => {
           // Enforce 2026 baseline constraint
           if (proj.chargeDate >= '2026-01-01') {
-            const tCycle = getCardCycle(proj.chargeDate, card.closingDay, card.dueDay);
+            const tCycle = getCardCycleForCard(card, proj.chargeDate);
             if (tCycle.billingMonth === targetBillingMonth) {
               detailedCharges.push({
                 id: `${purchase.id}-inst-${proj.installmentIndex}`,
@@ -339,13 +381,29 @@ export function computeMonthlyAccountBalances(
             const cashAcc = debitCards.find(d => d.id === 'deb-cash-pocket' || d.name.toLowerCase().includes('efectivo') || d.name.toLowerCase().includes('cash'));
             if (cashAcc) {
               cid = cashAcc.id;
+            } else if (debitCards.length > 0) {
+              cid = debitCards[0].id;
             }
-          } else if (t.paymentMethod === 'debit' || t.paymentMethod === 'transfer') {
+          } else {
             const checkingAcc = debitCards.find(d => d.id !== 'deb-cash-pocket' && !d.name.toLowerCase().includes('efectivo'));
             if (checkingAcc) {
               cid = checkingAcc.id;
             } else if (debitCards.length > 0) {
               cid = debitCards[0].id;
+            }
+          }
+        }
+
+        // Asegurar que para todas las transacciones de tipo Ingreso, se asocie con una tarjeta de débito/cuenta física real
+        if (t.type === 'income') {
+          const isDebit = debitCards.some(d => d.id === cid);
+          if (!isDebit) {
+            if (t.paymentMethod === 'cash') {
+              const cashAcc = debitCards.find(d => d.id === 'deb-cash-pocket' || d.name.toLowerCase().includes('efectivo') || d.name.toLowerCase().includes('cash'));
+              cid = cashAcc ? cashAcc.id : (debitCards[0]?.id || cid);
+            } else {
+              const checkingAcc = debitCards.find(d => d.id !== 'deb-cash-pocket' && !d.name.toLowerCase().includes('efectivo')) || debitCards[0];
+              cid = checkingAcc ? checkingAcc.id : (debitCards[0]?.id || cid);
             }
           }
         }

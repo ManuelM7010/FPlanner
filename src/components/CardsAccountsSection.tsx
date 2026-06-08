@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { 
   Plus, Trash2, CreditCard, Wallet, Landmark, Info, Check, 
-  HelpCircle, Sparkles, Pencil, X, ArrowUpRight, ArrowDownRight, Eye 
+  HelpCircle, Sparkles, Pencil, X, ArrowUpRight, ArrowDownRight, Eye,
+  Calendar, Settings
 } from 'lucide-react';
 import { AppState, CreditCard as CardType, DebitCard as AccountType } from '../types';
 import { computeMonthlyAccountBalances } from '../utils/financeUtils';
@@ -10,6 +11,7 @@ interface CardsAccountsSectionProps {
   state: AppState;
   onAddCreditCard: (card: Omit<CardType, 'id'>) => void;
   onDeleteCreditCard: (id: string) => void;
+  onUpdateCreditCard: (id: string, updated: Partial<CardType>) => void;
   onAddDebitCard: (acc: Omit<AccountType, 'id'>) => void;
   onDeleteDebitCard: (id: string) => void;
   onUpdateDebitCardBalance: (id: string, newBalance: number) => void;
@@ -20,6 +22,7 @@ export default function CardsAccountsSection({
   state,
   onAddCreditCard,
   onDeleteCreditCard,
+  onUpdateCreditCard,
   onAddDebitCard,
   onDeleteDebitCard,
   onUpdateDebitCardBalance,
@@ -53,6 +56,14 @@ export default function CardsAccountsSection({
   const [ccLimit, setCcLimit] = useState('');
   const [ccClosingDay, setCcClosingDay] = useState('15');
   const [ccDueDay, setCcDueDay] = useState('5');
+
+  // CC expand and edit state
+  const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
+  const [editingCardClosing, setEditingCardClosing] = useState<string>('15');
+  const [editingCardDue, setEditingCardDue] = useState<string>('5');
+  const [editingOverrideMonth, setEditingOverrideMonth] = useState<string>('');
+  const [editingCardNameField, setEditingCardNameField] = useState<string>('');
+  const [editingCardLimitField, setEditingCardLimitField] = useState<string>('');
 
   // New Debit Account Form State
   const [debName, setDebName] = useState('');
@@ -239,32 +250,272 @@ export default function CardsAccountsSection({
             {creditCards.length === 0 ? (
               <p className="text-xs text-slate-400 text-center py-6">No hay tarjetas de crédito registradas</p>
             ) : (
-              <div className="space-y-3">
-                {creditCards.map(card => (
-                  <div key={card.id} className="p-3.5 rounded-xl bg-gradient-to-br from-slate-800 to-slate-950 text-white flex justify-between items-center relative overflow-hidden group">
-                    <div className="space-y-2 z-10">
-                      <div>
-                        <h4 className="text-xs font-bold leading-none tracking-wide text-slate-100">{card.name}</h4>
-                        <span className="text-[9px] text-slate-400 uppercase tracking-widest font-mono">Límite: ${card.limit.toLocaleString()}</span>
+              <div className="space-y-4">
+                {creditCards.map(card => {
+                  const isExpanded = expandedCardId === card.id;
+                  const hasOverrides = card.overrides && Object.keys(card.overrides).length > 0;
+                  
+                  return (
+                    <div key={card.id} className="border border-slate-100 rounded-xl overflow-hidden shadow-xs hover:border-slate-200 transition-all">
+                      {/* Card main visual header */}
+                      <div className="p-4 bg-gradient-to-br from-slate-800 to-slate-950 text-white flex justify-between items-center relative overflow-hidden">
+                        <div className="space-y-1.5 z-10 select-none">
+                          <div>
+                            <h4 className="text-xs font-bold leading-none tracking-wide text-slate-100 flex items-center gap-1.5">
+                              <CreditCard className="w-3.5 h-3.5 text-indigo-400" />
+                              <span>{card.name}</span>
+                            </h4>
+                            <span className="text-[9px] text-slate-450 uppercase tracking-widest font-mono">Límite: ${card.limit.toLocaleString()}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-350">
+                            <span className="flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                              Corte: Día {card.closingDay}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                              Pago Límite: Día {card.dueDay}
+                            </span>
+                            {hasOverrides && (
+                              <span className="text-indigo-300 font-bold bg-indigo-500/20 px-1 py-0.5 rounded text-[8px]">
+                                {Object.keys(card.overrides || {}).length} meses ajustados
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2 items-center z-10">
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              if (isExpanded) {
+                                setExpandedCardId(null);
+                              } else {
+                                setExpandedCardId(card.id);
+                                setEditingCardClosing(String(card.closingDay));
+                                setEditingCardDue(String(card.dueDay));
+                                setEditingCardNameField(card.name);
+                                setEditingCardLimitField(String(card.limit));
+                                setEditingOverrideMonth(state.selectedMonth);
+                              }
+                            }}
+                            className="p-1 px-2.5 bg-white/10 hover:bg-white/20 transition-all rounded text-white text-[10px] font-semibold border border-white/10 flex items-center gap-1"
+                            title="Modificar parámetros o fechas de pago"
+                          >
+                            <Settings className="w-3 h-3 text-slate-300" />
+                            {isExpanded ? 'Cerrar' : 'Ajustar Fechas'}
+                          </button>
+                          
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              if (confirm(`¿Estás seguro de que deseas eliminar la tarjeta ${card.name}?`)) {
+                                onDeleteCreditCard(card.id);
+                              }
+                            }}
+                            className="p-1 px-2 bg-rose-600/25 hover:bg-rose-600 text-rose-200 hover:text-white transition-all rounded text-[10px] font-semibold border border-rose-500/25"
+                            title="Eliminar tarjeta"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+
+                        {/* Faux hologram badge effect */}
+                        <div className="absolute right-40 top-3 w-8 h-6 bg-indigo-400/10 rounded-md blur-xs pointer-events-none" />
                       </div>
-                      <div className="flex gap-4 text-[10px] text-slate-350">
-                        <span>Corte: Día {card.closingDay}</span>
-                        <span>Límite Pago: Día {card.dueDay}</span>
-                      </div>
+
+                      {/* Expandable configuration panel */}
+                      {isExpanded && (
+                        <div className="p-4 bg-slate-50 border-t border-slate-100 space-y-4 text-xs font-semibold text-slate-700 select-text">
+                          {/* Part 1: Default configuration */}
+                          <div>
+                            <h5 className="text-[10px] text-indigo-700 uppercase tracking-wider mb-2 pb-1 border-b border-indigo-100 flex items-center gap-1">
+                              <span>Configuración General</span>
+                            </h5>
+                            
+                            <div className="grid grid-cols-2 gap-3 mb-3">
+                              <div className="space-y-1">
+                                <label className="text-slate-500 text-[10.5px]">Nombre de Tarjeta</label>
+                                <input 
+                                  type="text"
+                                  value={editingCardNameField}
+                                  onChange={(e) => setEditingCardNameField(e.target.value)}
+                                  className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-md text-slate-800 font-normal focus:outline-none focus:ring-1 focus:ring-slate-400"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-slate-500 text-[10.5px]">Límite ($ USD)</label>
+                                <input 
+                                  type="number"
+                                  value={editingCardLimitField}
+                                  onChange={(e) => setEditingCardLimitField(e.target.value)}
+                                  className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-md text-slate-800 font-normal focus:outline-none focus:ring-1 focus:ring-slate-400"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1">
+                                <label className="text-slate-500 text-[10.5px]">Día de Corte General</label>
+                                <input 
+                                  type="number"
+                                  min="1"
+                                  max="31"
+                                  value={editingCardClosing}
+                                  onChange={(e) => setEditingCardClosing(e.target.value)}
+                                  className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-md text-slate-800 font-normal focus:outline-none focus:ring-1 focus:ring-slate-400 font-mono"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-slate-500 text-[10.5px]">Día Límite Pago General</label>
+                                <input 
+                                  type="number"
+                                  min="1"
+                                  max="31"
+                                  value={editingCardDue}
+                                  onChange={(e) => setEditingCardDue(e.target.value)}
+                                  className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-md text-slate-800 font-normal focus:outline-none focus:ring-1 focus:ring-slate-400 font-mono"
+                                />
+                              </div>
+                            </div>
+                            
+                            <div className="pt-2 flex justify-end">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onUpdateCreditCard(card.id, {
+                                    name: editingCardNameField.trim(),
+                                    limit: parseFloat(editingCardLimitField) || card.limit,
+                                    closingDay: parseInt(editingCardClosing, 10) || card.closingDay,
+                                    dueDay: parseInt(editingCardDue, 10) || card.dueDay
+                                  });
+                                  alert('Parámetros base actualizados!');
+                                }}
+                                className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded text-[10px] transition-colors"
+                              >
+                                Guardar Datos Base
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Part 2: Monthly date overrides */}
+                          <div className="pt-2 border-t border-slate-200">
+                            <h5 className="text-[10px] text-emerald-700 uppercase tracking-wider mb-2 flex items-center gap-1">
+                              <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Personalización por Mes del Corte (Alertas dinámicas)</span>
+                            </h5>
+                            <p className="text-[10px] text-slate-450 font-normal mb-3">
+                              Elige un mes específico para cambiar sus fechas de corte y de pago de manera única (el banco suele moverlas según feriados o montos).
+                            </p>
+
+                            <div className="grid grid-cols-3 gap-2.5 items-end bg-slate-100 p-3 rounded-lg border border-slate-200">
+                              <div className="space-y-1">
+                                <label className="text-slate-500 text-[9.5px]">Mes del Estado</label>
+                                <select 
+                                  value={editingOverrideMonth}
+                                  onChange={(e) => setEditingOverrideMonth(e.target.value)}
+                                  className="w-full px-2 py-1.5 bg-white border border-slate-250 rounded text-slate-800 font-semibold text-[10.5px]"
+                                >
+                                  {[
+                                    '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06',
+                                    '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12'
+                                  ].map(m => (
+                                    <option key={m} value={m}>{m === state.selectedMonth ? `${m} (Activo)` : m}</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-slate-500 text-[9.5px]">Corte Especial (Día)</label>
+                                <input 
+                                  type="number"
+                                  min="1"
+                                  max="31"
+                                  placeholder="Ej. 14"
+                                  id={`override-closing-input-${card.id}`}
+                                  className="w-full px-2 py-1 bg-white border border-slate-250 rounded text-slate-800 font-mono"
+                                />
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-slate-500 text-[9.5px]">Pago Especial (Día)</label>
+                                <input 
+                                  type="number"
+                                  min="1"
+                                  max="31"
+                                  placeholder="Ej. 4"
+                                  id={`override-due-input-${card.id}`}
+                                  className="w-full px-2 py-1 bg-white border border-slate-250 rounded text-slate-800 font-mono"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex gap-2 justify-end pt-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const closeIn = document.getElementById(`override-closing-input-${card.id}`) as HTMLInputElement;
+                                  const dueIn = document.getElementById(`override-due-input-${card.id}`) as HTMLInputElement;
+                                  
+                                  const cVal = closeIn ? parseInt(closeIn.value, 10) : NaN;
+                                  const dVal = dueIn ? parseInt(dueIn.value, 10) : NaN;
+
+                                  if (isNaN(cVal) || isNaN(dVal) || cVal < 1 || cVal > 31 || dVal < 1 || dVal > 31) {
+                                    alert('Por favor ingresa días válidos (1 al 31) en ambos campos de corte y pago especial.');
+                                    return;
+                                  }
+
+                                  const curOverrides = card.overrides || {};
+                                  const nextOverrides = {
+                                    ...curOverrides,
+                                    [editingOverrideMonth]: { closingDay: cVal, dueDay: dVal }
+                                  };
+
+                                  onUpdateCreditCard(card.id, { overrides: nextOverrides });
+                                  
+                                  if (closeIn) closeIn.value = '';
+                                  if (dueIn) dueIn.value = '';
+                                  alert(`¡Fecha especial aplicada con éxito para el mes de corte ${editingOverrideMonth}!`);
+                                }}
+                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded text-[10px] transition-colors"
+                              >
+                                Aplicar Cambio para {editingOverrideMonth}
+                              </button>
+                            </div>
+
+                            {/* Overrides Table */}
+                            {hasOverrides && (
+                              <div className="mt-3 pt-3 border-t border-slate-200">
+                                <span className="text-[10px] text-slate-450 font-bold block mb-1.5 uppercase">Calendario de Fechas Especiales Activas:</span>
+                                <div className="space-y-1.5 max-h-24 overflow-y-auto">
+                                  {Object.entries(card.overrides || {}).map(([monthK, dayV]) => (
+                                    <div key={monthK} className="flex justify-between items-center text-[10px] bg-white p-2 rounded-md border border-slate-150">
+                                      <span className="font-mono text-slate-700">
+                                        📅 <strong className="font-semibold text-slate-800">{monthK}</strong>: Corte el <strong>Día {dayV.closingDay}</strong>, Pago Límite el <strong>Día {dayV.closingDay > dayV.dueDay ? `${dayV.dueDay} (mes sig)` : dayV.dueDay}</strong>
+                                      </span>
+                                      
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const nextOvr = { ...card.overrides };
+                                          delete nextOvr[monthK];
+                                          onUpdateCreditCard(card.id, { overrides: nextOvr });
+                                        }}
+                                        className="text-rose-600 hover:text-rose-700 font-bold underline cursor-pointer"
+                                      >
+                                        Restaurar default
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
-
-                    <button 
-                      onClick={() => onDeleteCreditCard(card.id)}
-                      className="p-1 px-2.5 bg-white/10 hover:bg-rose-600 hover:text-white transition-colors duration-200 rounded text-rose-300 text-[10px] font-semibold border border-white/5 z-10"
-                      title="Eliminar tarjeta"
-                    >
-                      Eliminar
-                    </button>
-
-                    {/* Faux hologram badge effect */}
-                    <div className="absolute right-32 top-3 w-8 h-6 bg-amber-400/20 rounded-md blur-xs" />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

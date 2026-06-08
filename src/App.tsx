@@ -658,6 +658,13 @@ export default function App() {
     }));
   };
 
+  const handleUpdateCreditCard = (id: string, updated: Partial<CardType>) => {
+    setState(prev => ({
+      ...prev,
+      creditCards: prev.creditCards.map(c => c.id === id ? { ...c, ...updated } : c)
+    }));
+  };
+
   // 4. Debit Accounts Actions
   const handleAddDebitCard = (newAcc: Omit<AccountType, 'id'>) => {
     const id = `deb-${Date.now()}`;
@@ -847,6 +854,7 @@ export default function App() {
             state={state}
             onAddCreditCard={handleAddCreditCard}
             onDeleteCreditCard={handleDeleteCreditCard}
+            onUpdateCreditCard={handleUpdateCreditCard}
             onAddDebitCard={handleAddDebitCard}
             onDeleteDebitCard={handleDeleteDebitCard}
             onUpdateDebitCardBalance={handleUpdateDebitCardBalance}
@@ -865,6 +873,7 @@ export default function App() {
             state={state} 
             onNavigate={setActiveTab} 
             onUpdateDebitCardInitialBalance={handleUpdateDebitCardInitialBalance}
+            onUpdateCreditCard={handleUpdateCreditCard}
           />
         );
     }

@@ -4,6 +4,7 @@ export interface CreditCard {
   limit: number;
   closingDay: number; // Day of the month (e.g., 15)
   dueDay: number;     // Day of the month (e.g., 5 of next month)
+  overrides?: Record<string, { closingDay: number; dueDay: number }>; // Local monthly overrides (YYYY-MM)
 }
 
 export interface DebitCard {
