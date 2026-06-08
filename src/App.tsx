@@ -26,6 +26,7 @@ import CardStatementSection from './components/CardStatementSection';
 import CalendarSection from './components/CalendarSection';
 import AiAdvisorSection from './components/AiAdvisorSection';
 import SubscriptionsSection from './components/SubscriptionsSection';
+import DailyBalanceSection from './components/DailyBalanceSection';
 
 export default function App() {
   // Navigation active tab State
@@ -865,6 +866,8 @@ export default function App() {
         return <CardStatementSection state={state} />;
       case 'calendario':
         return <CalendarSection state={state} />;
+      case 'saldo-diario':
+        return <DailyBalanceSection state={state} />;
       case 'asesor-ia':
         return <AiAdvisorSection state={state} />;
       default:
@@ -1198,6 +1201,18 @@ export default function App() {
                 CALENDARIO de Pagos
               </span>
               <ChevronRight className="w-3.5 h-3.5 opacity-60" />
+            </button>
+
+            <button 
+              onClick={() => { setActiveTab('saldo-diario'); setMobileMenuOpen(false); }}
+              className={`w-full text-left p-3 rounded-lg flex items-center justify-between transition-all ${activeTab === 'saldo-diario' ? 'bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white font-bold shadow-xs' : 'text-indigo-650 bg-indigo-50/50 hover:bg-indigo-50 hover:text-indigo-950 border border-indigo-100/40'}`}
+              id="nav-tab-daily-balance"
+            >
+              <span className="flex items-center gap-2">
+                <Wallet className="w-4 h-4 text-indigo-500 animate-pulse" />
+                SALDO DIARIO & Liquidez
+              </span>
+              <ChevronRight className="w-3.5 h-3.5 opacity-60 text-indigo-500" />
             </button>
           </nav>
 
