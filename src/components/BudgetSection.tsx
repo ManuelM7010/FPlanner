@@ -29,6 +29,12 @@ export default function BudgetSection({
   // Inline editing states
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingDate, setEditingDate] = useState<string>('');
+  const [editingAmount, setEditingAmount] = useState<string>('');
+  const [editingDescription, setEditingDescription] = useState<string>('');
+
+  // Filter States
+  const [selectedFilterCategory, setSelectedFilterCategory] = useState<string>('all');
+  const [selectedFilterAsset, setSelectedFilterAsset] = useState<string>('all');
 
   // Local form states
   const [description, setDescription] = useState('');
@@ -146,8 +152,30 @@ export default function BudgetSection({
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
 
   const filteredList = monthlyTransactions.filter(t => {
-    if (filterType === 'all') return true;
-    return t.type === filterType;
+    // 1. Filter by transaction type (Gasto / Ingreso)
+    if (filterType !== 'all' && t.type !== filterType) return false;
+
+    // 2. Filter by Category
+    if (selectedFilterCategory !== 'all' && t.category !== selectedFilterCategory) return false;
+
+    // 3. Filter by Pago / Vínculo
+    if (selectedFilterAsset !== 'all') {
+      if (selectedFilterAsset === 'cash') {
+        return t.paymentMethod === 'cash';
+      }
+      if (selectedFilterAsset === 'transfer_no_card') {
+        return t.paymentMethod === 'transfer' && !t.cardId;
+      }
+      if (selectedFilterAsset.startsWith('debit-')) {
+        const id = selectedFilterAsset.replace('debit-', '');
+        return (t.paymentMethod === 'debit' || t.paymentMethod === 'transfer') && t.cardId === id;
+      }
+      if (selectedFilterAsset.startsWith('credit-')) {
+        const id = selectedFilterAsset.replace('credit-', '');
+        return t.paymentMethod === 'credit' && t.cardId === id;
+      }
+    }
+    return true;
   });
 
   return (
@@ -341,25 +369,69 @@ export default function BudgetSection({
             </div>
 
             {/* Type filters */}
-            <div className="flex space-x-1.5">
+            <div className="flex bg-slate-100 p-0.5 rounded-lg text-xs font-semibold self-start sm:self-auto">
               <button 
                 onClick={() => setFilterType('all')} 
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${filterType === 'all' ? 'bg-slate-100 text-slate-700' : 'text-slate-400 hover:text-slate-600'}`}
+                className={`px-3 py-1.5 rounded-md transition-all ${filterType === 'all' ? 'bg-white text-slate-800 shadow-xs shadow-[0_1px_2px_rgba(0,0,0,0.05)] font-bold' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 Todos ({monthlyTransactions.length})
               </button>
               <button 
                 onClick={() => setFilterType('income')} 
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${filterType === 'income' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-400 hover:text-emerald-600'}`}
+                className={`px-3 py-1.5 rounded-md transition-all ${filterType === 'income' ? 'bg-white text-slate-800 shadow-xs shadow-[0_1px_2px_rgba(0,0,0,0.05)] font-bold' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 Ingresos ({monthlyIncomes.length})
               </button>
               <button 
                 onClick={() => setFilterType('expense')} 
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${filterType === 'expense' ? 'bg-rose-50 text-rose-700' : 'text-slate-400 hover:text-rose-600'}`}
+                className={`px-3 py-1.5 rounded-md transition-all ${filterType === 'expense' ? 'bg-white text-slate-800 shadow-xs shadow-[0_1px_2px_rgba(0,0,0,0.05)] font-bold' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 Gastos ({monthlyExpenses.length})
               </button>
+            </div>
+          </div>
+
+          {/* Dynamic Category and Account Filters */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 bg-slate-50/60 p-3 rounded-lg border border-slate-100/70">
+            {/* Category Filter */}
+            <div className="space-y-1">
+              <label className="text-[10px] uppercase tracking-wide font-extrabold text-slate-400 block">Filtrar por Categoría</label>
+              <select
+                value={selectedFilterCategory}
+                onChange={(e) => setSelectedFilterCategory(e.target.value)}
+                className="w-full text-xs px-2.5 py-1.5 bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-400 font-normal text-slate-755"
+              >
+                <option value="all">Todas las categorías</option>
+                {categories.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.type === 'income' ? '🟢' : '🔴'} {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Asset / Vínculo Filter */}
+            <div className="space-y-1">
+              <label className="text-[10px] uppercase tracking-wide font-extrabold text-slate-400 block">Filtrar por Pago / Vínculo</label>
+              <select
+                value={selectedFilterAsset}
+                onChange={(e) => setSelectedFilterAsset(e.target.value)}
+                className="w-full text-xs px-2.5 py-1.5 bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-400 font-normal text-slate-755"
+              >
+                <option value="all">Todos los pagos/vínculos</option>
+                <option value="cash">💵 Solo Efectivo</option>
+                <option value="transfer_no_card">🏦 Solo Transferencias (Gral.)</option>
+                {debitCards.map(d => (
+                  <option key={d.id} value={`debit-${d.id}`}>
+                    🏦 Débito: {d.name}
+                  </option>
+                ))}
+                {creditCards.map(c => (
+                  <option key={c.id} value={`credit-${c.id}`}>
+                    💳 Crédito: {c.name}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -405,27 +477,13 @@ export default function BudgetSection({
                       <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors group">
                         <td className="py-3 text-slate-400 font-mono text-[11px] whitespace-nowrap">
                           {editingId === tx.id ? (
-                            <div className="flex items-center gap-1">
-                              <input 
-                                type="date"
-                                value={editingDate}
-                                onChange={(e) => setEditingDate(e.target.value)}
-                                className="px-1.5 py-0.5 border border-slate-300 rounded text-[10px] text-slate-800 bg-white"
-                                required
-                              />
-                              <button 
-                                onClick={() => {
-                                  if (editingDate && onUpdateTransaction) {
-                                    onUpdateTransaction(tx.id, { date: editingDate });
-                                  }
-                                  setEditingId(null);
-                                }}
-                                className="p-1 bg-emerald-50 text-emerald-600 rounded border border-emerald-100 hover:bg-emerald-100"
-                                title="Guardar fecha"
-                              >
-                                <Check className="w-3 h-3" />
-                              </button>
-                            </div>
+                            <input 
+                              type="date"
+                              value={editingDate}
+                              onChange={(e) => setEditingDate(e.target.value)}
+                              className="px-2 py-1 border border-slate-350 rounded text-xs text-slate-800 bg-white font-mono w-[125px]"
+                              required
+                            />
                           ) : (
                             <div className="flex items-center gap-1 group/row">
                               <span>{tx.date}</span>
@@ -433,9 +491,11 @@ export default function BudgetSection({
                                 onClick={() => {
                                   setEditingId(tx.id);
                                   setEditingDate(tx.date);
+                                  setEditingAmount(String(tx.amount));
+                                  setEditingDescription(tx.description);
                                 }}
                                 className="text-slate-400 hover:text-slate-750 opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
-                                title="Editar fecha exacta"
+                                title="Editar registro"
                               >
                                 <Calendar className="w-3.5 h-3.5" />
                               </button>
@@ -443,14 +503,31 @@ export default function BudgetSection({
                           )}
                         </td>
                         <td className="py-3 pr-2">
-                          <div className="font-semibold text-slate-700 flex items-center gap-1.5">
-                            {tx.description}
-                            {tx.isFixed && (
-                              <span className="text-[9px] bg-slate-100 text-slate-650 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap flex items-center gap-0.5">
-                                Fijo
-                              </span>
-                            )}
-                          </div>
+                          {editingId === tx.id ? (
+                            <div className="flex flex-col gap-1 w-full max-w-[200px]">
+                              <input 
+                                type="text"
+                                value={editingDescription}
+                                onChange={(e) => setEditingDescription(e.target.value)}
+                                className="px-2 py-1 border border-slate-350 rounded text-xs text-slate-800 bg-white font-medium"
+                                required
+                              />
+                              {tx.isFixed && (
+                                <span className="text-[9px] bg-slate-100 text-slate-650 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap self-start">
+                                  Fijo
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="font-semibold text-slate-750 flex items-center gap-1.5">
+                              {tx.description}
+                              {tx.isFixed && (
+                                <span className="text-[9px] bg-slate-100 text-slate-650 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap flex items-center gap-0.5">
+                                  Fijo
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="py-3">
                           <span 
@@ -462,20 +539,82 @@ export default function BudgetSection({
                           </span>
                         </td>
                         <td className="py-3 text-slate-500 font-medium whitespace-nowrap">
-                          <span className="text-[10px] block">{paymentMethodLabels[tx.paymentMethod]}</span>
+                          <span className="text-[10px] block font-semibold">{paymentMethodLabels[tx.paymentMethod]}</span>
                           <span className="text-[9px] text-slate-400 font-normal">{cardLabel}</span>
                         </td>
-                        <td className={`py-3 text-right font-bold text-sm whitespace-nowrap ${tx.type === 'income' ? 'text-emerald-600' : 'text-slate-700'}`}>
-                          {tx.type === 'income' ? '+' : '-'}${tx.amount.toLocaleString()}
+                        <td className="py-3 text-right font-bold text-sm whitespace-nowrap">
+                          {editingId === tx.id ? (
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-slate-400 text-xs font-bold">{tx.type === 'income' ? '+' : '-'}</span>
+                              <input 
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                value={editingAmount}
+                                onChange={(e) => setEditingAmount(e.target.value)}
+                                className="px-2 py-1 border border-slate-350 rounded text-xs text-slate-800 bg-white font-semibold text-right w-[80px]"
+                                required
+                              />
+                            </div>
+                          ) : (
+                            <span className={tx.type === 'income' ? 'text-emerald-600 font-extrabold' : 'text-slate-755 font-bold'}>
+                              {tx.type === 'income' ? '+' : '-'}${tx.amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                            </span>
+                          )}
                         </td>
                         <td className="py-3 text-center">
-                          <button 
-                            onClick={() => onDeleteTransaction(tx.id)}
-                            className="p-1 px-2 text-rose-500 hover:bg-rose-50 rounded-md opacity-0 group-hover:opacity-100 transition-all font-medium text-[10px] uppercase flex items-center gap-0.5 mx-auto"
-                            title="Eliminar movimiento"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" /> Borrar
-                          </button>
+                          {editingId === tx.id ? (
+                            <div className="flex flex-col sm:flex-row items-center justify-center gap-1.5">
+                              <button 
+                                onClick={() => {
+                                  const parsedVal = parseFloat(editingAmount);
+                                  if (editingDate && !isNaN(parsedVal) && parsedVal > 0 && onUpdateTransaction) {
+                                    onUpdateTransaction(tx.id, { 
+                                      date: editingDate,
+                                      amount: parsedVal,
+                                      description: editingDescription
+                                    });
+                                  }
+                                  setEditingId(null);
+                                }}
+                                className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold uppercase transition-all flex items-center gap-0.5 justify-center"
+                                title="Guardar cambios"
+                              >
+                                <Check className="w-3.5 h-3.5" /> Ok
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  setEditingId(null);
+                                }}
+                                className="px-2 py-1 text-slate-500 hover:bg-slate-100 border border-slate-200 rounded text-[10px] font-bold uppercase transition-all"
+                                title="Cancelar cambios"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center gap-1">
+                              <button 
+                                onClick={() => {
+                                  setEditingId(tx.id);
+                                  setEditingDate(tx.date);
+                                  setEditingAmount(String(tx.amount));
+                                  setEditingDescription(tx.description);
+                                }}
+                                className="p-1 px-2 text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-100 rounded-md opacity-0 group-hover:opacity-100 transition-all font-semibold text-[10px] uppercase flex items-center gap-0.5 cursor-pointer"
+                                title="Editar este movimiento"
+                              >
+                                Editar
+                              </button>
+                              <button 
+                                onClick={() => onDeleteTransaction(tx.id)}
+                                className="p-1 px-2 text-rose-500 hover:bg-rose-50 border border-transparent hover:border-rose-100 rounded-md opacity-0 group-hover:opacity-100 transition-all font-semibold text-[10px] uppercase flex items-center gap-0.5 cursor-pointer"
+                                title="Eliminar movimiento"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" /> Borrar
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );
