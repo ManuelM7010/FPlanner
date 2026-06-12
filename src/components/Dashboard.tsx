@@ -567,8 +567,8 @@ export default function Dashboard({ state, onNavigate, onUpdateDebitCardInitialB
               <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider group-hover:text-slate-500 transition-colors truncate">Ahorro Proyectado</span>
               <span className="text-[9px] text-blue-500 font-bold bg-blue-50 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity shrink-0">Ver</span>
             </div>
-            <div className={`text-2xl font-bold ${projectedSavings >= 0 ? 'text-blue-600' : 'text-amber-600'}`}>
-              ${projectedSavings.toLocaleString()}
+            <div className={`text-2xl font-bold ${projectedSavings >= 0 ? 'text-blue-600' : 'text-amber-600 font-extrabold'}`}>
+              {projectedSavings >= 0 ? `$${projectedSavings.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : `-$${Math.abs(projectedSavings).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`}
             </div>
             <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1 truncate">
               <PiggyBank className="w-3 h-3 text-blue-500" />
@@ -1548,31 +1548,104 @@ export default function Dashboard({ state, onNavigate, onUpdateDebitCardInitialB
 
               {selectedKpi === 'savings' && (
                 <div className="space-y-6">
-                  {/* Header overview numbers */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="bg-emerald-50/40 p-3 rounded-lg border border-emerald-100/40 text-center">
-                      <span className="text-[10px] text-slate-455 uppercase font-bold tracking-wider block">Ingresos (+)</span>
-                      <strong className="text-emerald-700 text-sm font-mono">${monthlyIncomes.toLocaleString()}</strong>
-                    </div>
-                    <div className="bg-indigo-50/40 p-3 rounded-lg border border-indigo-100/40 text-center">
-                      <span className="text-[10px] text-slate-455 uppercase font-bold tracking-wider block">Gastos Proyectados (-)</span>
-                      <strong className="text-indigo-700 text-sm font-mono">${totalProjectedExpenses.toLocaleString()}</strong>
-                    </div>
-                    <div className={`p-3 rounded-lg border text-center ${projectedSavings >= 0 ? 'bg-blue-50/40 border-blue-100/40' : 'bg-amber-50/40 border-amber-100/40'}`}>
-                      <span className="text-[10px] text-slate-455 uppercase font-bold tracking-wider block">Ahorro Proyectado (=)</span>
-                      <strong className={`text-sm font-mono ${projectedSavings >= 0 ? 'text-blue-700' : 'text-amber-700'}`}>
-                        ${projectedSavings.toLocaleString()}
-                      </strong>
+                  {/* Explanation of calculations and dual metrics */}
+                  <div className="bg-slate-50 border border-slate-200/60 p-4 rounded-xl space-y-3">
+                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                      <PiggyBank className="w-4 h-4 text-blue-500" />
+                      Fórmulas y Conciliación de Ahorro
+                    </h4>
+                    <p className="text-slate-650 text-xs leading-relaxed">
+                      El sistema calcula el ahorro desde dos perspectivas complementarias para darte un control total tanto de tus <strong>hábitos de consumo</strong> como de tu <strong>liquidez real en cuentas</strong>:
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                      {/* Perspective A: Cashflow basis */}
+                      <div className="bg-white p-3.5 rounded-lg border border-slate-100 shadow-3xs space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Ahorro de Flujo Real (Caja)</span>
+                          <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${projectedSavings >= 0 ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-700'}`}>
+                            {projectedSavings >= 0 ? 'Excedente' : 'Déficit Flujo'}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-450 leading-normal">
+                          Mide el cambio real de tu efectivo este mes. Resta del ingreso todos los pagos realizados (incluye cuotas de préstamos y el corte anterior de tus tarjetas de crédito).
+                        </p>
+                        <div className="bg-slate-50 p-2 rounded text-xs font-mono font-bold text-slate-750 flex flex-col gap-1 border border-slate-100/50">
+                          <div className="flex justify-between items-center text-[11px]">
+                            <span className="font-normal text-slate-500">Ingresos (+)</span>
+                            <span className="text-emerald-600">${monthlyIncomes.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-[11px]">
+                            <span className="font-normal text-slate-500">Egresos Reales (-)</span>
+                            <span className="text-rose-600">${totalOutflows.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                          </div>
+                          <div className="border-t border-slate-200 mt-1 pt-1 flex justify-between items-center font-bold">
+                            <span className="text-[10px] uppercase text-slate-600">Ahorro Real (=)</span>
+                            <span className={projectedSavings >= 0 ? 'text-blue-600' : 'text-amber-600'}>
+                              {projectedSavings >= 0 ? `$${projectedSavings.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : `-$${Math.abs(projectedSavings).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-[10px] text-slate-450 text-right">
+                          Tasa de ahorro real: <strong className={projectedSavings >= 0 ? 'text-blue-600 font-bold' : 'text-amber-600 font-bold'}>{projectedSavingsRate.toFixed(1)}%</strong>
+                        </div>
+                      </div>
+
+                      {/* Perspective B: Accrual basis */}
+                      {(() => {
+                        const accrualSavings = monthlyIncomes - totalProjectedExpenses;
+                        const accrualSavingsRate = monthlyIncomes > 0 ? (accrualSavings / monthlyIncomes) * 100 : 0;
+                        return (
+                          <div className="bg-white p-3.5 rounded-lg border border-slate-100 shadow-3xs space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Capacidad de Ahorro (Mes)</span>
+                              <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${accrualSavings >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-700'}`}>
+                                {accrualSavings >= 0 ? 'Positiva' : 'Negativa'}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-455 leading-normal">
+                              Mide el margen de ahorro generado solo por la actividad de este mes. Resta del ingreso los gastos que creaste en el mes actual (sea pagado en efectivo o tarjeta).
+                            </p>
+                            <div className="bg-slate-50 p-2 rounded text-xs font-mono font-bold text-slate-750 flex flex-col gap-1 border border-slate-100/50">
+                              <div className="flex justify-between items-center text-[11px]">
+                                <span className="font-normal text-slate-500">Ingresos (+)</span>
+                                <span className="text-emerald-700">${monthlyIncomes.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                              </div>
+                              <div className="flex justify-between items-center text-[11px]">
+                                <span className="font-normal text-slate-500">Gastos Registrados (-)</span>
+                                <span className="text-indigo-600">${totalProjectedExpenses.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                              </div>
+                              <div className="border-t border-slate-200 mt-1 pt-1 flex justify-between items-center font-bold">
+                                <span className="text-[10px] uppercase text-slate-600">Margen del Mes (=)</span>
+                                <span className={accrualSavings >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                                  {accrualSavings >= 0 ? `$${accrualSavings.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : `-$${Math.abs(accrualSavings).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-[10px] text-slate-455 text-right">
+                              Capacidad de ahorro: <strong className={accrualSavings >= 0 ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'}>{accrualSavingsRate.toFixed(1)}%</strong>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
 
                   {/* Subtitle / Insight info */}
-                  <div className="p-3 bg-slate-50 border border-slate-200/60 rounded-lg text-slate-500 leading-normal flex items-start gap-1.5 font-medium">
-                    <PiggyBank className="w-4 h-4 text-slate-450 shrink-0 mt-0.5" />
+                  <div className="p-3 bg-blue-50/40 border border-blue-100/50 rounded-lg text-slate-600 leading-relaxed flex items-start gap-1.5 font-medium text-xs">
+                    <PiggyBank className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
                     <div>
-                      <span className="font-bold text-slate-800">Información de Ahorro:</span> 
+                      <span className="font-bold text-slate-800">Interpretación:</span> 
                       <span className="ml-1 text-slate-650">
-                        Con una tasa de ahorro del <strong className="text-blue-600">{projectedSavingsRate.toFixed(1)}%</strong>, tu presupuesto destina esta parte a tus metas de reserva. A continuación se desglosan las categorías principales de gasto que más influyen en tu ahorro:
+                        {projectedSavings < 0 ? (
+                          <>
+                            Tu <strong>Ahorro Real de Flujo es negativo ({projectedSavingsRate.toFixed(1)}%)</strong> debido a que estás desembolsando más efectivo del que ingresas para amortizar deudas o pagos pendientes de tus tarjetas de crédito de meses previos. Sin embargo, si tu margen de consumo mensual de este mes es positivo, significa que tus hábitos de compras en el mes actual están controlados de forma saludable.
+                          </>
+                        ) : (
+                          <>
+                            ¡Excelente! Tienes un <strong>Ahorro de Flujo positivo de {projectedSavingsRate.toFixed(1)}%</strong> de tus ingresos. Esto significa que estás aumentando efectivamente tu liquidez neta en tus cuentas este mes después de pagar todos tus compromisos de efectivo y tarjetas.
+                          </>
+                        )}
                       </span>
                     </div>
                   </div>
