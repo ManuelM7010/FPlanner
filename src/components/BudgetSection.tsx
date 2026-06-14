@@ -65,6 +65,16 @@ export default function BudgetSection({
   const monthlyIncomes = monthlyTransactions.filter(t => t.type === 'income');
   const monthlyExpenses = monthlyTransactions.filter(t => t.type === 'expense');
 
+  // Define today's date in local time YYYY-MM-DD and filter today's transactions
+  const todayStr = (() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  })();
+  const todayTransactions = monthlyTransactions.filter(t => t.date === todayStr);
+
   // Autoselect category based on first item of filtered list when type shifts
   React.useEffect(() => {
     const defaultOfCurrentType = categories.find(c => c.type === type);
@@ -149,11 +159,17 @@ export default function BudgetSection({
     }
   }, [paymentMethod]);
 
-  const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'income' | 'expense' | 'today'>('all');
 
   const filteredList = monthlyTransactions.filter(t => {
-    // 1. Filter by transaction type (Gasto / Ingreso)
-    if (filterType !== 'all' && t.type !== filterType) return false;
+    // 1. Filter by transaction type or date
+    if (filterType !== 'all') {
+      if (filterType === 'today') {
+        if (t.date !== todayStr) return false;
+      } else {
+        if (t.type !== filterType) return false;
+      }
+    }
 
     // 2. Filter by Category
     if (selectedFilterCategory !== 'all' && t.category !== selectedFilterCategory) return false;
@@ -388,6 +404,12 @@ export default function BudgetSection({
               >
                 Gastos ({monthlyExpenses.length})
               </button>
+              <button 
+                onClick={() => setFilterType('today')} 
+                className={`px-3 py-1.5 rounded-md transition-all ${filterType === 'today' ? 'bg-white text-slate-800 shadow-xs shadow-[0_1px_2px_rgba(0,0,0,0.05)] font-bold' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Hoy ({todayTransactions.length})
+              </button>
             </div>
           </div>
 
@@ -473,8 +495,17 @@ export default function BudgetSection({
                       cardLabel = '💵 Efectivo';
                     }
 
+                    const isPastOrToday = tx.date <= todayStr;
+
                     return (
-                      <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors group">
+                      <tr 
+                        key={tx.id} 
+                        className={`transition-colors group border-b border-slate-100/30 ${
+                          isPastOrToday 
+                            ? 'bg-emerald-50/20 hover:bg-emerald-50/35' 
+                            : 'hover:bg-slate-50/50'
+                        }`}
+                      >
                         <td className="py-3 text-slate-400 font-mono text-[11px] whitespace-nowrap">
                           {editingId === tx.id ? (
                             <input 
@@ -485,8 +516,14 @@ export default function BudgetSection({
                               required
                             />
                           ) : (
-                            <div className="flex items-center gap-1 group/row">
-                              <span>{tx.date}</span>
+                            <div className="flex items-center gap-1.5 group/row">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-tight inline-block whitespace-nowrap ${
+                                isPastOrToday 
+                                  ? 'bg-emerald-100/70 text-emerald-800 border border-emerald-200/40' 
+                                  : 'bg-slate-100 text-slate-500 border border-slate-200/40'
+                              }`}>
+                                {tx.date}
+                              </span>
                               <button 
                                 onClick={() => {
                                   setEditingId(tx.id);

@@ -113,22 +113,31 @@ export default function App() {
     setSyncError(null);
     setLoginErrorDetail(null);
     const isInsideIframe = window.self !== window.top;
+    const currentDomain = window.location.hostname;
     
     try {
       await signInWithGoogle();
     } catch (err: any) {
       console.error('Google Sign In Error in component:', err);
       let errorMsg = 'Error al iniciar sesión.';
+      
       if (err?.code === 'auth/popup-blocked') {
         errorMsg = 'Tu navegador bloqueó la ventana emergente de Google. Por favor, permite ventanas emergentes.';
       } else if (err?.code === 'auth/cancelled-popup-request' || err?.message?.includes('cancelled')) {
         errorMsg = 'Inicio de sesión cancelado o interrumpido.';
       } else if (err?.code === 'auth/network-request-failed') {
         errorMsg = 'Error de red. Verifica tu conexión a internet.';
+      } else if (err?.code === 'auth/unauthorized-domain' || err?.message?.includes('unauthorized-domain') || err?.message?.includes('unauthorized domain')) {
+        errorMsg = `Dominio no autorizado para inicio de sesión en Firebase. El dominio "${currentDomain}" no está en la lista de dominios autorizados de la base de datos de desarrollo de AI Studio. Para solucionarlo debes vincular tu propio proyecto personal de Firebase.`;
       } else if (isInsideIframe) {
         errorMsg = 'Los navegadores bloquean la autenticación dentro del entorno iframe de desarrollo.';
       }
-      setLoginErrorDetail(err?.message || String(err));
+      
+      const debugDetail = err?.code 
+        ? `Código: ${err.code}\nMensaje: ${err.message}\nDominio actual: ${currentDomain}` 
+        : String(err);
+        
+      setLoginErrorDetail(debugDetail);
       setSyncError(errorMsg);
       setShowAuthHelpModal(true);
     }
