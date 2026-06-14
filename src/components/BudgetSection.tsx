@@ -4,7 +4,7 @@ import {
   Tag, Info, Check, Sparkles, FolderPlus, ArrowUpRight, ArrowDownRight 
 } from 'lucide-react';
 import { AppState, Transaction, PaymentMethod, Category } from '../types';
-import { computeMonthlyAccountBalances } from '../utils/financeUtils';
+import { computeMonthlyAccountBalances, getCardCycleForCard, computeCardStatementsForMonth } from '../utils/financeUtils';
 
 interface BudgetSectionProps {
   state: AppState;
@@ -161,6 +161,191 @@ export default function BudgetSection({
       setCardId('');
     }
   }, [paymentMethod]);
+
+  // Dynamic Simulation Hook / Memo for real-time spend recommendation
+  const simulationReport = React.useMemo(() => {
+    const val = parseFloat(amount);
+    if (isNaN(val) || val <= 0 || type !== 'expense') return null;
+
+    const txDate = date || todayStr;
+    const currentTxMonth = txDate.substring(0, 7);
+
+    // 1. Evaluate Option Cash/Debit/Transfer
+    let debitCid = cardId;
+    if (paymentMethod !== 'debit' && paymentMethod !== 'transfer') {
+      const firstDebit = debitCards.find(d => d.id !== 'deb-cash-pocket') || debitCards[0];
+      debitCid = firstDebit ? firstDebit.id : '';
+    }
+    
+    const debitCardObj = debitCards.find(d => d.id === debitCid);
+    const debitCardName = debitCardObj ? debitCardObj.name : 'Cuenta Débito';
+
+    // Simulate Debit option
+    const debitSimulation = (() => {
+      const tempTx: Transaction = {
+        id: 'sim-debit-tx',
+        description: description || 'Gasto Proyectado',
+        amount: val,
+        type: 'expense',
+        category: category || 'sim',
+        paymentMethod: 'debit',
+        cardId: debitCid || undefined,
+        date: txDate,
+        month: currentTxMonth,
+        isFixed: false
+      };
+      
+      const simTransactions = [...transactions, tempTx];
+      const [startY, startM] = currentTxMonth.split('-').map(Number);
+      const issues: { month: string; cardName: string; balance: number }[] = [];
+      
+      for (let i = 0; i < 12; i++) {
+        const m = (startM - 1 + i) % 12 + 1;
+        const y = startY + Math.floor((startM - 1 + i) / 12);
+        const mStr = `${y}-${String(m).padStart(2, '0')}`;
+        
+        const flows = computeMonthlyAccountBalances(
+          debitCards,
+          simTransactions,
+          creditCards,
+          installments,
+          mStr,
+          state.initialBalancesOverrides
+        );
+        
+        Object.values(flows).forEach(flow => {
+          if (flow.finalBalance < 0) {
+            const alreadyIn = issues.some(iss => iss.cardName === flow.cardName && iss.month === mStr);
+            if (!alreadyIn) {
+              issues.push({ month: mStr, cardName: flow.cardName, balance: flow.finalBalance });
+            }
+          }
+        });
+      }
+      
+      return { issues };
+    })();
+
+    // 2. Evaluate Option Credit (for each credit card)
+    const creditSimulations = creditCards.map(card => {
+      const cycle = getCardCycleForCard(card, txDate);
+      
+      const tempTx: Transaction = {
+        id: 'sim-credit-tx',
+        description: description || 'Gasto Proyectado',
+        amount: val,
+        type: 'expense',
+        category: category || 'sim',
+        paymentMethod: 'credit',
+        cardId: card.id,
+        date: txDate,
+        month: currentTxMonth,
+        isFixed: false
+      };
+      
+      const simTransactions = [...transactions, tempTx];
+      
+      const stmts = computeCardStatementsForMonth(creditCards, simTransactions, installments, cycle.billingMonth);
+      const cardStatement = stmts.find(s => s.cardId === card.id);
+      const spent = cardStatement ? cardStatement.billingBalance : 0;
+      const limitExceeded = spent > card.limit;
+      const margin = card.limit - spent;
+
+      const [startY, startM] = currentTxMonth.split('-').map(Number);
+      const issues: { month: string; cardName: string; balance: number }[] = [];
+      
+      for (let i = 0; i < 12; i++) {
+        const m = (startM - 1 + i) % 12 + 1;
+        const y = startY + Math.floor((startM - 1 + i) / 12);
+        const mStr = `${y}-${String(m).padStart(2, '0')}`;
+        
+        const flows = computeMonthlyAccountBalances(
+          debitCards,
+          simTransactions,
+          creditCards,
+          installments,
+          mStr,
+          state.initialBalancesOverrides
+        );
+        
+        Object.values(flows).forEach(flow => {
+          if (flow.finalBalance < 0) {
+            const alreadyIn = issues.some(iss => iss.cardName === flow.cardName && iss.month === mStr);
+            if (!alreadyIn) {
+              issues.push({ month: mStr, cardName: flow.cardName, balance: flow.finalBalance });
+            }
+          }
+        });
+      }
+
+      return {
+        cardId: card.id,
+        cardName: card.name,
+        spent,
+        limitExceeded,
+        margin,
+        billingMonth: cycle.billingMonth,
+        closingDate: cycle.statementClosingDate,
+        paymentMonth: cycle.paymentMonth,
+        dueDate: cycle.paymentDueDate,
+        issues
+      };
+    });
+
+    // Provide recommendations
+    let recommendation = '';
+    let recommendationColor = 'text-emerald-700 bg-emerald-50 border-emerald-100';
+    let isWarning = false;
+
+    const safeCreditCards = creditSimulations.filter(c => !c.limitExceeded && c.issues.length === 0);
+    const anyDebitIssues = debitSimulation.issues.length > 0;
+
+    if (paymentMethod === 'credit') {
+      const activeC = creditSimulations.find(c => c.cardId === cardId);
+      if (activeC) {
+        if (activeC.limitExceeded) {
+          recommendation = `La tarjeta seleccionada superará su límite disponible por $${Math.abs(activeC.margin).toLocaleString()}. ¡Se recomienda buscar otra opción!`;
+          recommendationColor = 'text-rose-700 bg-rose-50 border-rose-100';
+          isWarning = true;
+        } else if (activeC.issues.length > 0) {
+          const firstIsh = activeC.issues[0];
+          recommendation = `Pagar con esta tarjeta diferirá el cargo, pero generará saldo negativo (-$${Math.abs(firstIsh.balance).toLocaleString()}) en "${firstIsh.cardName}" en ${firstIsh.month} al pagarse el estado de cuenta.`;
+          recommendationColor = 'text-amber-700 bg-amber-50 border-amber-100';
+          isWarning = true;
+        } else {
+          recommendation = `Excelente elección. El cargo se facturará en el periodo ${activeC.billingMonth} (pago en ${activeC.paymentMonth}), y cuentas con fondos proyectados suficientes para pagarlo sin comprometer tu liquidez.`;
+          recommendationColor = 'text-emerald-700 bg-emerald-50 border-emerald-100';
+        }
+      }
+    } else {
+      if (anyDebitIssues) {
+        const firstIsh = debitSimulation.issues[0];
+        if (safeCreditCards.length > 0) {
+          recommendation = `Advertencia: Usar débito ahora causará saldo negativo en "${firstIsh.cardName}" en ${firstIsh.month}. Se sugiere usar la Tarjeta de Crédito "${safeCreditCards[0].cardName}" para diferir el cobro de forma segura y evitar sobregiros.`;
+          recommendationColor = 'text-indigo-700 bg-indigo-50 border-indigo-100/60';
+          isWarning = true;
+        } else {
+          recommendation = `Atención: Pagar en efectivo/débito directamente te dejará en saldo negativo (-$${Math.abs(firstIsh.balance).toLocaleString()}) en "${firstIsh.cardName}" en el mes de ${firstIsh.month}. Trata de reducir o posponer este gasto.`;
+          recommendationColor = 'text-rose-700 bg-rose-50 border-rose-100';
+          isWarning = true;
+        }
+      } else {
+        recommendation = `Balance saludable. Cuentas con saldo disponible suficiente en tu cuenta de débito para cubrir el gasto directamente sin acumular deudas ni generar sobregiros reales.`;
+        recommendationColor = 'text-emerald-700 bg-emerald-50 border-emerald-100';
+      }
+    }
+
+    return {
+      debit: {
+        cardName: debitCardName,
+        ...debitSimulation
+      },
+      creditCards: creditSimulations,
+      recommendation,
+      recommendationColor,
+      isWarning
+    };
+  }, [amount, date, paymentMethod, cardId, description, category, transactions, creditCards, debitCards, installments, state.initialBalancesOverrides, todayStr, type]);
 
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense' | 'today'>('all');
 
@@ -339,9 +524,18 @@ export default function BudgetSection({
                   required
                 >
                   {getSubAccountOptions().map(opt => {
-                    const balanceText = paymentMethod === 'credit' 
-                      ? `Límite: $${(opt as any).limit}` 
-                      : `Saldo: $${(accountFlows[opt.id]?.finalBalance ?? (opt as any).balance).toLocaleString()}`;
+                    let balanceText = '';
+                    if (paymentMethod === 'credit') {
+                      const ccOpt = opt as any;
+                      const cycle = getCardCycleForCard(ccOpt, date || todayStr);
+                      const statements = computeCardStatementsForMonth(creditCards, transactions, installments, cycle.billingMonth);
+                      const stmtStatus = statements.find(s => s.cardId === ccOpt.id);
+                      const spent = stmtStatus ? stmtStatus.billingBalance : 0;
+                      const available = ccOpt.limit - spent;
+                      balanceText = `Disp: $${available.toLocaleString()} / Cargado: $${spent.toLocaleString()} / Líte: $${ccOpt.limit.toLocaleString()}`;
+                    } else {
+                      balanceText = `Saldo Final: $${(accountFlows[opt.id]?.finalBalance ?? (opt as any).balance).toLocaleString()}`;
+                    }
                     return (
                       <option key={opt.id} value={opt.id}>
                         {opt.name} ({balanceText})
@@ -376,6 +570,98 @@ export default function BudgetSection({
             </button>
           </form>
         </div>
+
+        {/* Real-time Year-level Lookahead Simulator & Recommendation Card */}
+        {simulationReport && (
+          <div className="bg-slate-900 border border-slate-800 text-slate-100 p-5 rounded-xl shadow-md space-y-4 animate-fadeIn">
+            <div className="flex items-center gap-2 border-b border-slate-800 pb-2.5">
+              <Sparkles className="w-4 h-4 text-indigo-400" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                Asistente de Decisión y Proyecciones YTD
+              </h3>
+            </div>
+
+            {/* Recommendation Alert Box */}
+            <div className={`p-3 rounded-lg border text-[11px] leading-relaxed font-semibold ${simulationReport.recommendationColor}`}>
+              <div className="flex gap-2 items-start">
+                <Info className="w-4.5 h-4.5 flex-shrink-0 text-slate-700 mt-0.5" />
+                <span>{simulationReport.recommendation}</span>
+              </div>
+            </div>
+
+            {/* Side-by-side comparison matrix */}
+            <div className="space-y-3 pt-1">
+              <h4 className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 border-b border-slate-800/60 pb-1">
+                Análisis de Impacto (Próximos 12 meses)
+              </h4>
+
+              {/* Cash/Debit account option */}
+              <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-850/80 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-300">💵 Opción Débito o Efectivo</span>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${simulationReport.debit.issues.length === 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                    {simulationReport.debit.issues.length === 0 ? 'Sin Sobregiros' : 'Alerta de Saldo'}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  Reduce el saldo líquido en <strong className="text-slate-300">{simulationReport.debit.cardName}</strong>.
+                </p>
+                {simulationReport.debit.issues.length > 0 ? (
+                  <div className="text-[10px] text-rose-350 flex flex-col gap-0.5 mt-1 bg-rose-950/20 p-1.5 rounded border border-rose-900/30">
+                    <span className="font-bold text-rose-400">⚠️ Déficits detectados en proyección:</span>
+                    {simulationReport.debit.issues.slice(0, 3).map((iss, idx) => (
+                      <span key={idx}>• {iss.month}: {iss.cardName} caerá a <strong className="font-bold text-rose-350">${iss.balance.toLocaleString()}</strong></span>
+                    ))}
+                    {simulationReport.debit.issues.length > 3 && (
+                      <span className="text-slate-400 font-normal">y {simulationReport.debit.issues.length - 3} meses más...</span>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-emerald-400 font-medium pt-0.5 flex items-center gap-1">
+                    ✓ Tus finanzas líquidas se mantienen seguras y sobre cero todo el año con este pago.
+                  </p>
+                )}
+              </div>
+
+              {/* Credit cards list and impact simulation */}
+              {simulationReport.creditCards.length > 0 && (
+                <div className="space-y-2 pt-1">
+                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">💳 Opción Diferir con Tarjeta de Crédito (TDC)</span>
+                  <div className="grid grid-cols-1 gap-2">
+                    {simulationReport.creditCards.map(c => (
+                      <div key={c.cardId} className="bg-slate-950 p-2.5 rounded-lg border border-slate-850/80 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-slate-300">💳 {c.cardName}</span>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                            c.limitExceeded 
+                              ? 'bg-rose-500/10 text-rose-400' 
+                              : c.issues.length > 0 
+                                ? 'bg-amber-500/10 text-amber-400' 
+                                : 'bg-emerald-500/10 text-emerald-400'
+                          }`}>
+                            {c.limitExceeded ? 'Límite Superado' : c.issues.length > 0 ? 'Sobregiro Futuro' : 'Viable'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-y-1 text-[9.5px] text-slate-400 pb-0.5">
+                          <span>Corte: <strong className="text-slate-200">{c.closingDate.substring(5)}</strong> (Periodo {c.billingMonth})</span>
+                          <span>Pago: <strong className="text-slate-200">{c.dueDate.substring(5)}</strong> (Mes {c.paymentMonth})</span>
+                          <span className="col-span-2">Cupo disponible restante: <strong className={c.limitExceeded ? 'text-rose-400' : 'text-slate-200'}>${c.margin.toLocaleString()}</strong></span>
+                        </div>
+                        
+                        {c.issues.length > 0 && (
+                          <div className="text-[10.5px] text-amber-300 mt-1 bg-amber-950/20 p-1.5 rounded border border-amber-900/30 leading-snug">
+                            <span className="font-bold text-amber-400 block mb-0.5">⚠️ Riesgo de Liquidez en {c.paymentMonth}:</span>
+                            El cobro del estado de cuenta te dejará con un saldo negativo de <strong className="text-amber-200">-${Math.abs(c.issues[0].balance).toLocaleString()}</strong> en la cuenta <strong className="text-slate-200">"{c.issues[0].cardName}"</strong> en el mes de <strong className="text-slate-200">{c.issues[0].month}</strong>.
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Transactions list on Right (Widescreen) */}
