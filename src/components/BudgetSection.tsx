@@ -31,6 +31,9 @@ export default function BudgetSection({
   const [editingDate, setEditingDate] = useState<string>('');
   const [editingAmount, setEditingAmount] = useState<string>('');
   const [editingDescription, setEditingDescription] = useState<string>('');
+  const [editingCategory, setEditingCategory] = useState<string>('');
+  const [editingPaymentMethod, setEditingPaymentMethod] = useState<PaymentMethod>('cash');
+  const [editingCardId, setEditingCardId] = useState<string>('');
 
   // Filter States
   const [selectedFilterCategory, setSelectedFilterCategory] = useState<string>('all');
@@ -530,6 +533,9 @@ export default function BudgetSection({
                                   setEditingDate(tx.date);
                                   setEditingAmount(String(tx.amount));
                                   setEditingDescription(tx.description);
+                                  setEditingCategory(tx.category);
+                                  setEditingPaymentMethod(tx.paymentMethod);
+                                  setEditingCardId(tx.cardId || '');
                                 }}
                                 className="text-slate-400 hover:text-slate-750 opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
                                 title="Editar registro"
@@ -556,7 +562,7 @@ export default function BudgetSection({
                               )}
                             </div>
                           ) : (
-                            <div className="font-semibold text-slate-750 flex items-center gap-1.5">
+                            <div className="font-semibold text-slate-755 flex items-center gap-1.5">
                               {tx.description}
                               {tx.isFixed && (
                                 <span className="text-[9px] bg-slate-100 text-slate-650 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap flex items-center gap-0.5">
@@ -567,17 +573,81 @@ export default function BudgetSection({
                           )}
                         </td>
                         <td className="py-3">
-                          <span 
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-semibold text-[10px]"
-                            style={{ backgroundColor: `${categoryColor}15`, color: categoryColor }}
-                          >
-                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: categoryColor }} />
-                            {categoryName}
-                          </span>
+                          {editingId === tx.id ? (
+                            <select
+                              value={editingCategory}
+                              onChange={(e) => setEditingCategory(e.target.value)}
+                              className="px-1.5 py-1 border border-slate-350 rounded text-xs text-slate-800 bg-white font-medium max-w-[150px] outline-hidden focus:border-indigo-500"
+                            >
+                              {categories.filter(c => c.type === tx.type).map(c => (
+                                <option key={c.id} value={c.id}>
+                                  {c.name}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span 
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-semibold text-[10px]"
+                              style={{ backgroundColor: `${categoryColor}15`, color: categoryColor }}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: categoryColor }} />
+                              {categoryName}
+                            </span>
+                          )}
                         </td>
                         <td className="py-3 text-slate-500 font-medium whitespace-nowrap">
-                          <span className="text-[10px] block font-semibold">{paymentMethodLabels[tx.paymentMethod]}</span>
-                          <span className="text-[9px] text-slate-400 font-normal">{cardLabel}</span>
+                          {editingId === tx.id ? (
+                            <div className="flex flex-col gap-1 max-w-[160px]">
+                              <select
+                                value={editingPaymentMethod}
+                                onChange={(e) => {
+                                  const newMethod = e.target.value as PaymentMethod;
+                                  setEditingPaymentMethod(newMethod);
+                                  if (newMethod === 'credit' && creditCards.length > 0) {
+                                    setEditingCardId(creditCards[0].id);
+                                  } else if ((newMethod === 'debit' || newMethod === 'transfer') && debitCards.length > 0) {
+                                    setEditingCardId(debitCards[0].id);
+                                  } else {
+                                    setEditingCardId('');
+                                  }
+                                }}
+                                className="px-1.5 py-1 border border-slate-350 rounded text-[11px] text-slate-850 bg-white font-medium outline-hidden focus:border-indigo-500"
+                              >
+                                <option value="cash">Efectivo</option>
+                                <option value="transfer">Transferencia</option>
+                                <option value="debit">T. Débito</option>
+                                <option value="credit">T. Crédito</option>
+                              </select>
+
+                              {(editingPaymentMethod === 'credit' || editingPaymentMethod === 'debit' || editingPaymentMethod === 'transfer') && (
+                                <select
+                                  value={editingCardId}
+                                  onChange={(e) => setEditingCardId(e.target.value)}
+                                  className="px-1.5 py-0.5 border border-slate-350 rounded text-[10px] text-slate-600 bg-white font-medium outline-hidden focus:border-indigo-500"
+                                >
+                                  {editingPaymentMethod === 'credit' ? (
+                                    creditCards.map(c => (
+                                      <option key={c.id} value={c.id}>💳 {c.name}</option>
+                                    ))
+                                  ) : (
+                                    <>
+                                      {debitCards.map(d => (
+                                        <option key={d.id} value={d.id}>🏦 {d.name}</option>
+                                      ))}
+                                      {editingPaymentMethod === 'transfer' && (
+                                        <option value="">🏦 Gral. (Sin cuenta)</option>
+                                      )}
+                                    </>
+                                  )}
+                                </select>
+                              )}
+                            </div>
+                          ) : (
+                            <>
+                              <span className="text-[10px] block font-semibold">{paymentMethodLabels[tx.paymentMethod]}</span>
+                              <span className="text-[9px] text-slate-400 font-normal">{cardLabel}</span>
+                            </>
+                          )}
                         </td>
                         <td className="py-3 text-right font-bold text-sm whitespace-nowrap">
                           {editingId === tx.id ? (
@@ -609,7 +679,10 @@ export default function BudgetSection({
                                     onUpdateTransaction(tx.id, { 
                                       date: editingDate,
                                       amount: parsedVal,
-                                      description: editingDescription
+                                      description: editingDescription,
+                                      category: editingCategory,
+                                      paymentMethod: editingPaymentMethod,
+                                      cardId: (editingPaymentMethod === 'credit' || editingPaymentMethod === 'debit' || editingPaymentMethod === 'transfer') ? (editingCardId || undefined) : undefined
                                     });
                                   }
                                   setEditingId(null);
@@ -637,6 +710,9 @@ export default function BudgetSection({
                                   setEditingDate(tx.date);
                                   setEditingAmount(String(tx.amount));
                                   setEditingDescription(tx.description);
+                                  setEditingCategory(tx.category);
+                                  setEditingPaymentMethod(tx.paymentMethod);
+                                  setEditingCardId(tx.cardId || '');
                                 }}
                                 className="p-1 px-2 text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-100 rounded-md opacity-0 group-hover:opacity-100 transition-all font-semibold text-[10px] uppercase flex items-center gap-0.5 cursor-pointer"
                                 title="Editar este movimiento"
