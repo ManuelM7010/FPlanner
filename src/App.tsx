@@ -693,7 +693,7 @@ export default function App() {
 
   const handleUpdateDebitCardBalance = (id: string, newBalance: number) => {
     setState(prev => {
-      const flows = computeMonthlyAccountBalances(prev.debitCards, prev.transactions, prev.creditCards, prev.installments, prev.selectedMonth, prev.initialBalancesOverrides);
+      const flows = computeMonthlyAccountBalances(prev.debitCards, prev.transactions, prev.creditCards, prev.installments, prev.selectedMonth, prev.initialBalancesOverrides, prev.paidCardStatements);
       const flow = flows[id];
       let diff = 0;
       if (flow) {
@@ -755,6 +755,16 @@ export default function App() {
         initialBalancesOverrides: overrides
       };
     });
+  };
+
+  const handleUpdatePaidCardStatement = (key: string, record: any) => {
+    setState(prev => ({
+      ...prev,
+      paidCardStatements: {
+        ...(prev.paidCardStatements || {}),
+        [key]: record
+      }
+    }));
   };
 
   // 5. Category adder
@@ -830,7 +840,7 @@ export default function App() {
   const renderTabContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard state={state} onNavigate={(sect) => { setActiveTab(sect); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />;
+        return <Dashboard state={state} onNavigate={(sect) => { setActiveTab(sect); window.scrollTo({ top: 0, behavior: 'smooth' }); }} onUpdatePaidCardStatement={handleUpdatePaidCardStatement} onUpdateCreditCard={handleUpdateCreditCard} onUpdateDebitCardInitialBalance={handleUpdateDebitCardInitialBalance} />;
       case 'presupuesto':
         return (
           <BudgetSection 
@@ -886,6 +896,7 @@ export default function App() {
             onNavigate={setActiveTab} 
             onUpdateDebitCardInitialBalance={handleUpdateDebitCardInitialBalance}
             onUpdateCreditCard={handleUpdateCreditCard}
+            onUpdatePaidCardStatement={handleUpdatePaidCardStatement}
           />
         );
     }

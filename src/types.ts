@@ -37,6 +37,7 @@ export interface Transaction {
   subscriptionId?: string; // Links back to subscription template
   installmentId?: string;  // Links back to installment/loan purchase template
   installmentIndex?: number; // e.g., 3 (Cuota 3/12)
+  notes?: string; // Comentario opcional / Conciliación
 }
 
 export interface InstallmentPurchase {
@@ -64,6 +65,14 @@ export interface Subscription {
   initializedYears?: string[]; // Track which years have had their defaults generated
 }
 
+export interface CardPaymentRecord {
+  isPaid: boolean;
+  paidAmount?: number;
+  interestMode?: 'pct' | 'amount';
+  interestRatePct?: number;
+  projectedInterest?: number;
+}
+
 export interface AppState {
   transactions: Transaction[];
   creditCards: CreditCard[];
@@ -74,4 +83,6 @@ export interface AppState {
   subscriptions?: Subscription[]; // Lists user subscription planes templates
   deletedGeneratedIds?: string[]; // Track permanently deleted automatic transactions
   initialBalancesOverrides?: Record<string, Record<string, number>>; // cardId -> YYYY-MM -> initialBalance
+  paidCardStatements?: Record<string, CardPaymentRecord>; // `${cardId}_${billingMonth}` -> status
 }
+

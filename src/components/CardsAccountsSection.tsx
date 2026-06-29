@@ -37,7 +37,8 @@ export default function CardsAccountsSection({
     state.creditCards, 
     state.installments, 
     state.selectedMonth,
-    state.initialBalancesOverrides
+    state.initialBalancesOverrides,
+    state.paidCardStatements
   );
 
   // Modal breakdown state

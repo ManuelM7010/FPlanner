@@ -6,7 +6,7 @@ import {
 import { 
   DollarSign, TrendingUp, TrendingDown, PiggyBank, CreditCard, Wallet, 
   AlertCircle, ChevronRight, Briefcase, Sparkles, Home, Calendar, Info, X, Eye,
-  Coins, Pencil, Check
+  Coins, Pencil, Check, CheckCircle2, Percent, Edit2
 } from 'lucide-react';
 import { AppState, Transaction, InstallmentPurchase, CreditCard as CardType } from '../types';
 import { getProjectedInstallments, computeCardStatementsForMonth, computeMonthlyAccountBalances } from '../utils/financeUtils';
@@ -16,10 +16,11 @@ interface DashboardProps {
   onNavigate: (section: string) => void;
   onUpdateDebitCardInitialBalance?: (id: string, month: string, newInitialBalance: number) => void;
   onUpdateCreditCard?: (id: string, updated: Partial<CardType>) => void;
+  onUpdatePaidCardStatement?: (key: string, record: any) => void;
 }
 
-export default function Dashboard({ state, onNavigate, onUpdateDebitCardInitialBalance, onUpdateCreditCard }: DashboardProps) {
-  const { transactions, creditCards, debitCards, installments, categories, selectedMonth } = state;
+export default function Dashboard({ state, onNavigate, onUpdateDebitCardInitialBalance, onUpdateCreditCard, onUpdatePaidCardStatement }: DashboardProps) {
+  const { transactions, creditCards, debitCards, installments, categories, selectedMonth, paidCardStatements } = state;
 
   const [viewType, setViewType] = React.useState<'monthly' | 'cumulative'>('monthly');
   const [selectedKpi, setSelectedKpi] = React.useState<'incomes' | 'projected_expenses' | 'outflows' | 'savings' | null>(null);
@@ -148,7 +149,7 @@ export default function Dashboard({ state, onNavigate, onUpdateDebitCardInitialB
       }
       const prevMStr = `${prevYr}-${String(prevM).padStart(2, '0')}`;
       
-      const prevStatement = computeCardStatementsForMonth(creditCards, transactions, installments, prevMStr)
+      const prevStatement = computeCardStatementsForMonth(creditCards, transactions, installments, prevMStr, paidCardStatements)
         .find(s => s.cardId === card.id);
       
       if (prevStatement) {
@@ -215,13 +216,13 @@ export default function Dashboard({ state, onNavigate, onUpdateDebitCardInitialB
   const otherExpenses = otherTxs.reduce((sum, t) => sum + t.amount, 0);
 
   // Account flows for the selectedMonth balance rollover logic
-  const accountFlows = computeMonthlyAccountBalances(debitCards, transactions, creditCards, installments, selectedMonth, state.initialBalancesOverrides);
+  const accountFlows = computeMonthlyAccountBalances(debitCards, transactions, creditCards, installments, selectedMonth, state.initialBalancesOverrides, paidCardStatements);
 
   const firstMonthOfPeriod = activePeriodMonths[0];
   const lastMonthOfPeriod = activePeriodMonths[activePeriodMonths.length - 1];
 
-  const initialAccountFlows = computeMonthlyAccountBalances(debitCards, transactions, creditCards, installments, firstMonthOfPeriod, state.initialBalancesOverrides);
-  const finalAccountFlows = computeMonthlyAccountBalances(debitCards, transactions, creditCards, installments, lastMonthOfPeriod, state.initialBalancesOverrides);
+  const initialAccountFlows = computeMonthlyAccountBalances(debitCards, transactions, creditCards, installments, firstMonthOfPeriod, state.initialBalancesOverrides, paidCardStatements);
+  const finalAccountFlows = computeMonthlyAccountBalances(debitCards, transactions, creditCards, installments, lastMonthOfPeriod, state.initialBalancesOverrides, paidCardStatements);
 
   const totalInitialCashBalance = debitCards.reduce((sum, d) => {
     const flow = initialAccountFlows[d.id];
@@ -316,7 +317,7 @@ export default function Dashboard({ state, onNavigate, onUpdateDebitCardInitialB
     
     let ccPay = 0;
     creditCards.forEach(card => {
-      const statement = computeCardStatementsForMonth(creditCards, transactions, installments, tcBillingMonthStr)
+      const statement = computeCardStatementsForMonth(creditCards, transactions, installments, tcBillingMonthStr, paidCardStatements)
         .find(s => s.cardId === card.id);
       if (statement) {
         ccPay += statement.billingBalance;
@@ -339,7 +340,7 @@ export default function Dashboard({ state, onNavigate, onUpdateDebitCardInitialB
   // Outstanding billing balances closing in active period
   let pendingClosingCharges = 0;
   activePeriodMonths.forEach(mStr => {
-    const tdcStatements = computeCardStatementsForMonth(creditCards, transactions, installments, mStr);
+    const tdcStatements = computeCardStatementsForMonth(creditCards, transactions, installments, mStr, paidCardStatements);
     tdcStatements.forEach(st => {
       pendingClosingCharges += st.billingBalance;
     });
@@ -930,7 +931,7 @@ export default function Dashboard({ state, onNavigate, onUpdateDebitCardInitialB
               {/* CC leverage block */}
               {(() => {
                 const totalLimit = creditCards.reduce((sum, c) => sum + c.limit, 0);
-                const summaries = computeCardStatementsForMonth(creditCards, transactions, installments, selectedMonth);
+                const summaries = computeCardStatementsForMonth(creditCards, transactions, installments, selectedMonth, paidCardStatements);
                 const totalDue = summaries.reduce((sum, s) => sum + s.billingBalance, 0);
                 const leveragePct = totalLimit > 0 ? (totalDue / totalLimit) * 100 : 0;
 
@@ -1399,7 +1400,7 @@ export default function Dashboard({ state, onNavigate, onUpdateDebitCardInitialB
                   const prevMStr = `${prevYr}-${String(prevM).padStart(2, '0')}`;
                   
                   creditCards.forEach(card => {
-                    const prevStatement = computeCardStatementsForMonth(creditCards, transactions, installments, prevMStr)
+                    const prevStatement = computeCardStatementsForMonth(creditCards, transactions, installments, prevMStr, paidCardStatements)
                       .find(s => s.cardId === card.id);
                     if (prevStatement && prevStatement.billingBalance > 0) {
                       tdcPaymentsList.push({
@@ -1726,7 +1727,7 @@ export default function Dashboard({ state, onNavigate, onUpdateDebitCardInitialB
 
       {/* DETALLES DE CORTE DE TARJETA DIALOG MODAL */}
       {selectedCardDetail && (() => {
-        const stmt = computeCardStatementsForMonth(creditCards, transactions, installments, selectedCardDetail.billingMonth)
+        const stmt = computeCardStatementsForMonth(creditCards, transactions, installments, selectedCardDetail.billingMonth, paidCardStatements)
           .find(s => s.cardId === selectedCardDetail.cardId);
         
         const detailedCharges = stmt ? stmt.detailedCharges : [];

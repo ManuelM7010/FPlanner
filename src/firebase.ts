@@ -99,6 +99,7 @@ export async function saveUserAppState(userId: string, state: AppState) {
       subscriptions: JSON.stringify(state.subscriptions || []),
       deletedGeneratedIds: JSON.stringify(state.deletedGeneratedIds || []),
       initialBalancesOverrides: JSON.stringify(state.initialBalancesOverrides || {}),
+      paidCardStatements: JSON.stringify(state.paidCardStatements || {}),
       updatedAt: serverTimestamp() // server-validated timestamps are required
     };
     
@@ -130,7 +131,8 @@ export async function getUserAppState(userId: string): Promise<Partial<AppState>
       categories: JSON.parse(data.categories || '[]'),
       subscriptions: JSON.parse(data.subscriptions || '[]'),
       deletedGeneratedIds: JSON.parse(data.deletedGeneratedIds || '[]'),
-      initialBalancesOverrides: JSON.parse(data.initialBalancesOverrides || '{}')
+      initialBalancesOverrides: JSON.parse(data.initialBalancesOverrides || '{}'),
+      paidCardStatements: JSON.parse(data.paidCardStatements || '{}')
     };
   } catch (error) {
     handleFirestoreError(error, OperationType.GET, path);

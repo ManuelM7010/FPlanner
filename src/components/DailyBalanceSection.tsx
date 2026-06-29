@@ -39,7 +39,7 @@ interface DayData {
 }
 
 export default function DailyBalanceSection({ state }: DailyBalanceSectionProps) {
-  const { transactions, creditCards, debitCards, installments, categories, selectedMonth, initialBalancesOverrides } = state;
+  const { transactions, creditCards, debitCards, installments, categories, selectedMonth, initialBalancesOverrides, paidCardStatements } = state;
 
   // Selected Day state (defaults to null, click to view detail card/modal)
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
@@ -73,7 +73,8 @@ export default function DailyBalanceSection({ state }: DailyBalanceSectionProps)
       creditCards,
       installments,
       selectedMonth,
-      initialBalancesOverrides
+      initialBalancesOverrides,
+      paidCardStatements
     );
     const initialCashBalance = Object.values(debitCardBalances).reduce((sum, d) => sum + d.initialBalance, 0);
 
@@ -180,7 +181,7 @@ export default function DailyBalanceSection({ state }: DailyBalanceSectionProps)
       prevYr -= 1;
     }
     const prevMonthStr = `${prevYr}-${String(prevM).padStart(2, '0')}`;
-    const prevStatements = computeCardStatementsForMonth(creditCards, transactions, installments, prevMonthStr);
+    const prevStatements = computeCardStatementsForMonth(creditCards, transactions, installments, prevMonthStr, paidCardStatements);
     
     prevStatements.forEach(stmt => {
       if (stmt.billingBalance > 0) {

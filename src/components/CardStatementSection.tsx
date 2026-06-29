@@ -11,8 +11,17 @@ interface CardStatementSectionProps {
 }
 
 export default function CardStatementSection({ state }: CardStatementSectionProps) {
-  const { creditCards, transactions, installments, selectedMonth } = state;
+  const { creditCards, transactions, installments, selectedMonth, paidCardStatements } = state;
   const [selectedCardId, setSelectedCardId] = useState<string>('');
+
+  // Custom Date Range State
+  const [rangeStartDate, setRangeStartDate] = useState(() => `${selectedMonth}-01`);
+  const [rangeEndDate, setRangeEndDate] = useState(() => {
+    const [y, m] = selectedMonth.split('-');
+    const lastDay = new Date(parseInt(y, 10), parseInt(m, 10), 0).getDate();
+    return `${selectedMonth}-${String(lastDay).padStart(2, '0')}`;
+  });
+  const [rangeCardFilter, setRangeCardFilter] = useState<string>('all');
 
   React.useEffect(() => {
     if (creditCards.length > 0 && !selectedCardId) {
@@ -28,7 +37,7 @@ export default function CardStatementSection({ state }: CardStatementSectionProp
   const monthName = monthNamesEs[parseInt(month, 10) - 1];
 
   // Compute all statements for the target period
-  const statements = computeCardStatementsForMonth(creditCards, transactions, installments, selectedMonth);
+  const statements = computeCardStatementsForMonth(creditCards, transactions, installments, selectedMonth, paidCardStatements);
   const activeStatement = statements.find(s => s.cardId === selectedCardId);
   const activeCardObj = creditCards.find(c => c.id === selectedCardId);
 
@@ -49,6 +58,16 @@ export default function CardStatementSection({ state }: CardStatementSectionProp
   const utilizationPct = activeStatement && activeStatement.limit > 0
     ? (activeStatement.billingBalance / activeStatement.limit) * 100
     : 0;
+
+  // Filtered charges for custom date range
+  const customRangeCharges = transactions.filter(t => {
+    if (t.paymentMethod !== 'credit') return false;
+    if (!t.date || t.date < rangeStartDate || t.date > rangeEndDate) return false;
+    if (rangeCardFilter !== 'all' && t.cardId !== rangeCardFilter) return false;
+    return true;
+  }).sort((a, b) => a.date.localeCompare(b.date));
+
+  const customRangeTotal = customRangeCharges.reduce((sum, t) => sum + (t.type === 'expense' ? t.amount : -t.amount), 0);
 
   return (
     <div className="space-y-6" id="card-statement-section">
@@ -210,6 +229,103 @@ export default function CardStatementSection({ state }: CardStatementSectionProp
           </div>
         </div>
       )}
+
+      {/* Custom Date Range Inquiry Section */}
+      <div className="mt-8 pt-6 border-t border-slate-200 bg-slate-50/70 p-5 rounded-2xl border border-slate-200/80 shadow-xs" id="custom-range-inquiry">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+          <div>
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-indigo-600" /> Consulta de Cargos entre Fechas
+            </h3>
+            <p className="text-[11px] text-slate-500">Filtra y calcula el total de consumos registrados en tus tarjetas en cualquier periodo personalizado</p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 border border-slate-250 rounded-lg">
+              <span className="text-[10px] uppercase font-bold text-slate-400">Desde</span>
+              <input 
+                type="date"
+                value={rangeStartDate}
+                onChange={(e) => setRangeStartDate(e.target.value)}
+                className="text-xs text-slate-800 font-semibold bg-transparent focus:outline-none"
+              />
+            </div>
+            <span className="text-slate-300 font-bold">→</span>
+            <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 border border-slate-250 rounded-lg">
+              <span className="text-[10px] uppercase font-bold text-slate-400">Hasta</span>
+              <input 
+                type="date"
+                value={rangeEndDate}
+                onChange={(e) => setRangeEndDate(e.target.value)}
+                className="text-xs text-slate-800 font-semibold bg-transparent focus:outline-none"
+              />
+            </div>
+
+            <select
+              value={rangeCardFilter}
+              onChange={(e) => setRangeCardFilter(e.target.value)}
+              className="px-2.5 py-1.5 border border-slate-250 rounded-lg text-xs bg-white text-slate-700 font-semibold focus:outline-none focus:border-indigo-500"
+            >
+              <option value="all">Todas las tarjetas</option>
+              {creditCards.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-200/70 overflow-hidden mb-4">
+          {customRangeCharges.length === 0 ? (
+            <div className="py-8 text-center text-slate-400 text-xs font-medium">
+              No se registraron cargos de tarjeta entre las fechas seleccionadas ({rangeStartDate} al {rangeEndDate})
+            </div>
+          ) : (
+            <div className="overflow-x-auto max-h-[300px]">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead className="bg-slate-100/80 sticky top-0 text-slate-600 font-semibold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                  <tr>
+                    <th className="py-2.5 pl-4">Fecha</th>
+                    <th className="py-2.5">Tarjeta</th>
+                    <th className="py-2.5">Descripción</th>
+                    <th className="py-2.5 text-right pr-4">Monto ($)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                  {customRangeCharges.map(tx => {
+                    const cObj = creditCards.find(c => c.id === tx.cardId);
+                    return (
+                      <tr key={tx.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-2.5 pl-4 text-slate-500 whitespace-nowrap font-mono text-[11px]">{tx.date}</td>
+                        <td className="py-2.5">
+                          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100/80">
+                            {cObj ? cObj.name : 'Tarjeta'}
+                          </span>
+                        </td>
+                        <td className="py-2.5">
+                          <div className="font-semibold text-slate-800">{tx.description}</div>
+                          {tx.notes && <div className="text-[10px] text-slate-400 italic">💬 {tx.notes}</div>}
+                        </td>
+                        <td className="py-2.5 text-right pr-4 font-bold text-slate-900">
+                          ${tx.amount.toLocaleString()}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-indigo-50/80 border border-indigo-100 p-3.5 rounded-xl text-xs">
+          <div className="text-indigo-800 font-medium">
+            Registros encontrados en el set: <strong className="font-bold">{customRangeCharges.length}</strong> cargos
+          </div>
+          <div className="text-sm font-bold text-indigo-950 flex items-center gap-2">
+            Total del Set de Gastos: <span className="text-indigo-600 font-extrabold text-base">${customRangeTotal.toLocaleString()}</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

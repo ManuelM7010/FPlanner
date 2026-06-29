@@ -20,7 +20,7 @@ interface CalendarEvent {
 }
 
 export default function CalendarSection({ state }: CalendarSectionProps) {
-  const { transactions, creditCards, installments, selectedMonth } = state;
+  const { transactions, creditCards, installments, selectedMonth, paidCardStatements } = state;
   const [selectedDayNum, setSelectedDayNum] = useState<number | null>(null);
 
   const [yearStr, monthStr] = selectedMonth.split('-');
@@ -80,7 +80,7 @@ export default function CalendarSection({ state }: CalendarSectionProps) {
   });
 
   // 3. Credit Card cut/closing cycles (cortes) taking place IN selectedMonth
-  const statementsThisMonth = computeCardStatementsForMonth(creditCards, transactions, installments, selectedMonth);
+  const statementsThisMonth = computeCardStatementsForMonth(creditCards, transactions, installments, selectedMonth, paidCardStatements);
   statementsThisMonth.forEach(st => {
     calendarEvents.push({
       id: `cc-cut-${st.cardId}-${selectedMonth}`,
@@ -101,7 +101,7 @@ export default function CalendarSection({ state }: CalendarSectionProps) {
     prevYear -= 1;
   }
   const prevMonthStr = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
-  const statementsPrevMonth = computeCardStatementsForMonth(creditCards, transactions, installments, prevMonthStr);
+  const statementsPrevMonth = computeCardStatementsForMonth(creditCards, transactions, installments, prevMonthStr, paidCardStatements);
   
   statementsPrevMonth.forEach(st => {
     calendarEvents.push({

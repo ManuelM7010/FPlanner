@@ -21,16 +21,17 @@ export default function BudgetSection({
   onAddCategory,
   onUpdateTransaction
 }: BudgetSectionProps) {
-  const { transactions, creditCards, debitCards, categories, selectedMonth, installments } = state;
+  const { transactions, creditCards, debitCards, categories, selectedMonth, installments, paidCardStatements } = state;
 
   // Computar saldos acumulados de cuentas de forma dinámica para el período seleccionado
-  const accountFlows = computeMonthlyAccountBalances(debitCards, transactions, creditCards, installments, selectedMonth, state.initialBalancesOverrides);
+  const accountFlows = computeMonthlyAccountBalances(debitCards, transactions, creditCards, installments, selectedMonth, state.initialBalancesOverrides, paidCardStatements);
 
   // Inline editing states
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingDate, setEditingDate] = useState<string>('');
   const [editingAmount, setEditingAmount] = useState<string>('');
   const [editingDescription, setEditingDescription] = useState<string>('');
+  const [editingNotes, setEditingNotes] = useState<string>('');
   const [editingCategory, setEditingCategory] = useState<string>('');
   const [editingPaymentMethod, setEditingPaymentMethod] = useState<PaymentMethod>('cash');
   const [editingCardId, setEditingCardId] = useState<string>('');
@@ -41,6 +42,7 @@ export default function BudgetSection({
 
   // Local form states
   const [description, setDescription] = useState('');
+  const [notes, setNotes] = useState('');
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<'income' | 'expense'>('expense');
   const [category, setCategory] = useState('');
@@ -100,6 +102,7 @@ export default function BudgetSection({
 
     onAddTransaction({
       description: description.trim(),
+      notes: notes.trim() || undefined,
       amount: parseFloat(amount),
       type,
       category,
@@ -112,6 +115,7 @@ export default function BudgetSection({
 
     // Reset fields
     setDescription('');
+    setNotes('');
     setAmount('');
     setIsFixed(false);
   };
@@ -210,7 +214,8 @@ export default function BudgetSection({
           creditCards,
           installments,
           mStr,
-          state.initialBalancesOverrides
+          state.initialBalancesOverrides,
+          paidCardStatements
         );
         
         Object.values(flows).forEach(flow => {
@@ -245,7 +250,7 @@ export default function BudgetSection({
       
       const simTransactions = [...transactions, tempTx];
       
-      const stmts = computeCardStatementsForMonth(creditCards, simTransactions, installments, cycle.billingMonth);
+      const stmts = computeCardStatementsForMonth(creditCards, simTransactions, installments, cycle.billingMonth, paidCardStatements);
       const cardStatement = stmts.find(s => s.cardId === card.id);
       const spent = cardStatement ? cardStatement.billingBalance : 0;
       const limitExceeded = spent > card.limit;
@@ -265,7 +270,8 @@ export default function BudgetSection({
           creditCards,
           installments,
           mStr,
-          state.initialBalancesOverrides
+          state.initialBalancesOverrides,
+          paidCardStatements
         );
         
         Object.values(flows).forEach(flow => {
@@ -427,6 +433,21 @@ export default function BudgetSection({
               />
             </div>
 
+            {/* Notes */}
+            <div className="space-y-1.5">
+              <label htmlFor="tx-notes" className="flex items-center gap-1.5 text-slate-500 text-xs font-medium">
+                💬 Comentario / Detalle (Opcional - Conciliación)
+              </label>
+              <input 
+                id="tx-notes"
+                type="text"
+                placeholder="Ej. Detalle de tickets para conciliar con banco"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="w-full px-3 py-1.5 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400 font-normal text-slate-800 text-xs"
+              />
+            </div>
+
             {/* Amount */}
             <div className="space-y-1.5">
               <label htmlFor="tx-amount" className="flex items-center gap-1.5 text-slate-500">
@@ -528,7 +549,7 @@ export default function BudgetSection({
                     if (paymentMethod === 'credit') {
                       const ccOpt = opt as any;
                       const cycle = getCardCycleForCard(ccOpt, date || todayStr);
-                      const statements = computeCardStatementsForMonth(creditCards, transactions, installments, cycle.billingMonth);
+                      const statements = computeCardStatementsForMonth(creditCards, transactions, installments, cycle.billingMonth, paidCardStatements);
                       const stmtStatus = statements.find(s => s.cardId === ccOpt.id);
                       const spent = stmtStatus ? stmtStatus.billingBalance : 0;
                       const available = ccOpt.limit - spent;
@@ -819,6 +840,7 @@ export default function BudgetSection({
                                   setEditingDate(tx.date);
                                   setEditingAmount(String(tx.amount));
                                   setEditingDescription(tx.description);
+                                  setEditingNotes(tx.notes || '');
                                   setEditingCategory(tx.category);
                                   setEditingPaymentMethod(tx.paymentMethod);
                                   setEditingCardId(tx.cardId || '');
@@ -841,6 +863,13 @@ export default function BudgetSection({
                                 className="px-2 py-1 border border-slate-350 rounded text-xs text-slate-800 bg-white font-medium"
                                 required
                               />
+                              <input 
+                                type="text"
+                                placeholder="Comentario opcional..."
+                                value={editingNotes}
+                                onChange={(e) => setEditingNotes(e.target.value)}
+                                className="px-2 py-0.5 border border-slate-300 rounded text-[10px] text-slate-600 bg-white font-normal"
+                              />
                               {tx.isFixed && (
                                 <span className="text-[9px] bg-slate-100 text-slate-650 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap self-start">
                                   Fijo
@@ -848,13 +877,39 @@ export default function BudgetSection({
                               )}
                             </div>
                           ) : (
-                            <div className="font-semibold text-slate-755 flex items-center gap-1.5">
-                              {tx.description}
-                              {tx.isFixed && (
-                                <span className="text-[9px] bg-slate-100 text-slate-650 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap flex items-center gap-0.5">
-                                  Fijo
+                            <div 
+                              onClick={() => {
+                                setEditingId(tx.id);
+                                setEditingDate(tx.date);
+                                setEditingAmount(String(tx.amount));
+                                setEditingDescription(tx.description);
+                                setEditingNotes(tx.notes || '');
+                                setEditingCategory(tx.category);
+                                setEditingPaymentMethod(tx.paymentMethod);
+                                setEditingCardId(tx.cardId || '');
+                              }}
+                              className="flex flex-col gap-0.5 cursor-pointer group/cell p-1 -m-1 rounded hover:bg-indigo-50/50 transition-colors"
+                              title="Clic para editar concepto o comentario"
+                            >
+                              <div className="font-semibold text-slate-755 flex items-center gap-1.5">
+                                {tx.description}
+                                {tx.isFixed && (
+                                  <span className="text-[9px] bg-slate-100 text-slate-650 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap flex items-center gap-0.5">
+                                    Fijo
+                                  </span>
+                                )}
+                                <span className="opacity-0 group-hover/cell:opacity-100 text-[10px] text-indigo-600 font-normal ml-auto whitespace-nowrap flex items-center gap-0.5">
+                                  ✏️ Editar
                                 </span>
-                              )}
+                              </div>
+                              <div className="text-[11px] text-slate-500 italic font-normal line-clamp-1 flex items-center gap-1 mt-0.5">
+                                <span>💬</span>
+                                {tx.notes ? (
+                                  <span className="text-slate-600">{tx.notes}</span>
+                                ) : (
+                                  <span className="text-slate-400 hover:text-indigo-600 underline decoration-dotted">+ Agregar comentario</span>
+                                )}
+                              </div>
                             </div>
                           )}
                         </td>
@@ -966,6 +1021,7 @@ export default function BudgetSection({
                                       date: editingDate,
                                       amount: parsedVal,
                                       description: editingDescription,
+                                      notes: editingNotes.trim() || undefined,
                                       category: editingCategory,
                                       paymentMethod: editingPaymentMethod,
                                       cardId: (editingPaymentMethod === 'credit' || editingPaymentMethod === 'debit' || editingPaymentMethod === 'transfer') ? (editingCardId || undefined) : undefined
@@ -996,18 +1052,19 @@ export default function BudgetSection({
                                   setEditingDate(tx.date);
                                   setEditingAmount(String(tx.amount));
                                   setEditingDescription(tx.description);
+                                  setEditingNotes(tx.notes || '');
                                   setEditingCategory(tx.category);
                                   setEditingPaymentMethod(tx.paymentMethod);
                                   setEditingCardId(tx.cardId || '');
                                 }}
-                                className="p-1 px-2 text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-100 rounded-md opacity-0 group-hover:opacity-100 transition-all font-semibold text-[10px] uppercase flex items-center gap-0.5 cursor-pointer"
+                                className="p-1 px-2 text-indigo-600 hover:bg-indigo-50 border border-indigo-100/50 hover:border-indigo-100 rounded-md transition-all font-semibold text-[10px] uppercase flex items-center gap-0.5 cursor-pointer bg-indigo-50/20"
                                 title="Editar este movimiento"
                               >
                                 Editar
                               </button>
                               <button 
                                 onClick={() => onDeleteTransaction(tx.id)}
-                                className="p-1 px-2 text-rose-500 hover:bg-rose-50 border border-transparent hover:border-rose-100 rounded-md opacity-0 group-hover:opacity-100 transition-all font-semibold text-[10px] uppercase flex items-center gap-0.5 cursor-pointer"
+                                className="p-1 px-2 text-rose-500 hover:bg-rose-50 border border-rose-100/50 hover:border-rose-100 rounded-md transition-all font-semibold text-[10px] uppercase flex items-center gap-0.5 cursor-pointer bg-rose-50/20"
                                 title="Eliminar movimiento"
                               >
                                 <Trash2 className="w-3.5 h-3.5" /> Borrar

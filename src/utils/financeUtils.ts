@@ -231,7 +231,8 @@ export function computeCardStatementsForMonth(
   cards: CreditCard[],
   transactions: Transaction[],
   installments: InstallmentPurchase[],
-  targetBillingMonth: string // YYYY-MM
+  targetBillingMonth: string, // YYYY-MM
+  paidCardStatements?: Record<string, any>
 ): CardStatementSummary[] {
   const summaries: CardStatementSummary[] = [];
 
@@ -298,6 +299,33 @@ export function computeCardStatementsForMonth(
       }
     });
 
+    // 3. Carryover unpaid balance + interest from previous cycle if partial payment recorded
+    if (paidCardStatements) {
+      let pYr = targetYear;
+      let pM = targetMonth - 1;
+      if (pM === 0) { pM = 12; pYr -= 1; }
+      const prevMStr = `${pYr}-${String(pM).padStart(2, '0')}`;
+      const prevRec = paidCardStatements[`${card.id}_${prevMStr}`];
+      if (prevRec && !prevRec.isPaid && prevRec.paidAmount !== undefined) {
+        const prevStmts = computeCardStatementsForMonth(cards, transactions, installments, prevMStr, paidCardStatements);
+        const matchPrev = prevStmts.find(s => s.cardId === card.id);
+        if (matchPrev) {
+          const unpaidPrincipal = Math.max(0, matchPrev.billingBalance - prevRec.paidAmount);
+          const interest = prevRec.projectedInterest || 0;
+          if (unpaidPrincipal + interest > 0) {
+            detailedCharges.push({
+              id: `carryover-${card.id}-${prevMStr}`,
+              description: `Saldo Pendiente ($${unpaidPrincipal.toFixed(2)}) + Interés proyectado ($${interest.toFixed(2)}) de Corte ${prevMStr}`,
+              amount: unpaidPrincipal + interest,
+              date: `${targetYear}-${String(targetMonth).padStart(2, '0')}-01`,
+              isInstallment: false
+            });
+            billingBalance += (unpaidPrincipal + interest);
+          }
+        }
+      }
+    }
+
     summaries.push({
       cardId: card.id,
       cardName: card.name,
@@ -333,7 +361,8 @@ export function computeMonthlyAccountBalances(
   creditCards: CreditCard[],
   installments: InstallmentPurchase[],
   targetMonth: string, // YYYY-MM
-  initialBalancesOverrides?: Record<string, Record<string, number>>
+  initialBalancesOverrides?: Record<string, Record<string, number>>,
+  paidCardStatements?: Record<string, any>
 ): Record<string, MonthlyAccountFlow> {
   const [targetYearStr, targetMonthStr] = targetMonth.split('-');
   const targetYear = parseInt(targetYearStr, 10);
@@ -444,8 +473,16 @@ export function computeMonthlyAccountBalances(
         prevYr -= 1;
       }
       const prevMStr = `${prevYr}-${String(prevM).padStart(2, '0')}`;
-      const prevStatements = computeCardStatementsForMonth(creditCards, transactions, installments, prevMStr);
-      const ccCardPaymentsDue = prevStatements.reduce((sum, s) => sum + s.billingBalance, 0);
+      const prevStatements = computeCardStatementsForMonth(creditCards, transactions, installments, prevMStr, paidCardStatements);
+      const ccCardPaymentsDue = prevStatements.reduce((sum, s) => {
+        const keyStat = paidCardStatements?.[`${s.cardId}_${prevMStr}`];
+        if (keyStat?.isPaid) {
+          return sum + s.billingBalance;
+        } else if (keyStat?.paidAmount !== undefined) {
+          return sum + keyStat.paidAmount;
+        }
+        return sum + s.billingBalance;
+      }, 0);
 
       // Add to expenses of the primary checking account
       monthExpenses[checkingAcc.id] = (monthExpenses[checkingAcc.id] || 0) + loanPayments + ccCardPaymentsDue;
